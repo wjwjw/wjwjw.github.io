@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width,initial-scale=1" />
+	<title>3D 俄罗斯方块 (three.js)</title>
+	<link rel="icon" href="./favicon.ico">
+	<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+	<div id="ui">
+		<div id="score">Score: 0</div>
+		<div id="lives">Lines: 0</div>
+		<button id="restart">Restart</button>
+	</div>
+	<div id="container"></div>
+
+	<!-- START OVERLAY: game入口与说明 -->
+	<div id="start-overlay">
+		<div class="start-card">
+			<h2>3D 俄罗斯方块</h2>
+			<p>参考本地项目：<code>E:\git_proj\3d-brick\俄罗斯方块\俄罗斯方块\main.cpp</code></p>
+			<p>鼠标移动旋转视角；方向键移动方块，空格下落，Q/W/E/R/T/Y 旋转。</p>
+			<button id="start-btn">开始游戏</button>
+		</div>
+	</div>
+
+	<script src="https://unpkg.com/three@0.149.0/build/three.min.js"></script>
+	<script src="./main.js" defer></script>
+</body>
+</html>
