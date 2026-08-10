@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>网页 URL 测速工具</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: Arial, Helvetica, "Microsoft YaHei", sans-serif; background: #111; color: #eee; min-height: 100vh; }
+    .container { max-width: 960px; margin: 0 auto; padding: 40px 20px 80px; }
+    h1 { font-size: 24px; margin-bottom: 8px; }
+    .sub { color: #999; font-size: 13px; margin-bottom: 26px; }
+    .input-row { display: flex; gap: 10px; }
+    #urlInput {
+      flex: 1; padding: 12px 14px; font-size: 15px; color: #eee;
+      background: #181818; border: 1px solid #333; border-radius: 8px; outline: none;
+    }
+    #urlInput:focus { border-color: #2196f3; }
+    button {
+      padding: 12px 24px; font-size: 15px; font-weight: 600; border: none; border-radius: 8px;
+      cursor: pointer; background: #2196f3; color: #fff; transition: background .2s;
+    }
+    button:hover:not(:disabled) { background: #1976d2; }
+    button:disabled { background: #375a75; cursor: not-allowed; }
+    #status { margin-top: 16px; font-size: 13px; color: #999; min-height: 18px; word-break: break-all; }
+    .progress-wrap { margin-top: 10px; height: 8px; background: #222; border-radius: 4px; overflow: hidden; display: none; }
+    .progress-wrap.show { display: block; }
+    #progressBar { height: 100%; width: 0; background: linear-gradient(90deg, #2196f3, #64b5f6); transition: width .3s; }
+    #errorBox { display: none; margin-top: 16px; padding: 12px 14px; background: #3d1414; color: #ff8a8a; border: 1px solid #5c1f1f; border-radius: 8px; font-size: 13px; word-break: break-all; }
+    .card { background: #181818; border-radius: 10px; margin-top: 24px; overflow: hidden; display: none; }
+    .card.show { display: block; }
+    .card-head { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-bottom: 1px solid #2a2a2a; font-weight: 600; }
+    .card-head .total { color: #999; font-size: 12px; font-weight: 400; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 11px 18px; text-align: left; font-size: 13px; }
+    thead th { background: #1f1f1f; color: #999; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
+    tbody tr { border-top: 1px solid #262626; cursor: pointer; }
+    tbody tr:hover { background: #202020; }
+    .rank { width: 56px; font-weight: 700; color: #2196f3; }
+    .url-cell { max-width: 420px; }
+    .url-cell a { color: #64b5f6; text-decoration: underline; word-break: break-all; }
+    .url-cell a:hover { color: #90caf9; }
+    .speed { font-weight: 700; color: #4caf50; min-width: 84px; }
+    .speed.fail { color: #ef5350; }
+    .samples { color: #6b7280; font-size: 11px; }
+    .tag { display: inline-block; font-size: 10px; padding: 2px 7px; border-radius: 9px; margin-left: 8px; vertical-align: 2px; }
+    .tag.html { background: #0d2538; color: #4fc3f7; }
+    .tag.css { background: #3a3006; color: #ffd54f; }
+    .tag.js { background: #3a0f24; color: #f06292; }
+    .tag.img { background: #12321c; color: #66bb6a; }
+    .tag.other { background: #262626; color: #9e9e9e; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>网页 URL 测速工具</h1>
+    <p class="sub">输入网址，自动提取页面上的所有 http/https 地址（自动去重），每个地址测速 5 次取平均值，按速度从快到慢排序，点击可跳转。</p>
+
+    <div class="input-row">
+      <input id="urlInput" type="text" placeholder="https://example.com" spellcheck="false" />
+      <button id="startBtn">开始测速</button>
+    </div>
+    <div id="errorBox"></div>
+    <div id="status"></div>
+    <div class="progress-wrap" id="progressWrap">
+      <div id="progressBar"></div>
+    </div>
+
+    <div class="card" id="resultCard">
+      <div class="card-head">
+        <span>测速结果</span>
+        <span class="total" id="resultTotal"></span>
+      </div>
+      <table>
+        <thead>
+          <tr><th>排名</th><th>地址</th><th>平均耗时</th><th>5 次样本 (ms)</th></tr>
+        </thead>
+        <tbody id="resultBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const input = document.getElementById('urlInput');
+      const btn = document.getElementById('startBtn');
+      const statusEl = document.getElementById('status');
+      const errorBox = document.getElementById('errorBox');
+      const progressWrap = document.getElementById('progressWrap');
+      const progressBar = document.getElementById('progressBar');
+      const resultCard = document.getElementById('resultCard');
+      const resultBody = document.getElementById('resultBody');
+      const resultTotal = document.getElementById('resultTotal');
+
+      const TEST_TIMES = 5;
+      const SAMPLE_TIMEOUT = 15000;
+      const CONCURRENCY = 4;
+      const PROXIES = [
+        (u) => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
+        (u) => 'https://corsproxy.io/?url=' + encodeURIComponent(u)
+      ];
+
+      function setStatus(t) { statusEl.textContent = t; }
+      function setError(t) {
+        if (t) { errorBox.textContent = t; errorBox.style.display = 'block'; }
+        else errorBox.style.display = 'none';
+      }
+
+      async function fetchText(url) {
+        for (const proxy of PROXIES) {
+          try {
+            const resp = await fetch(proxy(url), { redirect: 'follow' });
+            if (!resp.ok) continue;
+            return await resp.text();
+          } catch (e) { /* 尝试下一个代理 */ }
+        }
+        throw new Error('所有代理抓取失败，请稍后再试或更换网址');
+      }
+
+      function extractUrls(html, base) {
+        const urls = new Set();
+        const add = (raw) => {
+          try {
+            const u = new URL(raw, base);
+            if (u.protocol !== 'http:' && u.protocol !== 'https:') return;
+            urls.add(u.href);
+          } catch (e) { }
+        };
+        const tagRe = /<(a|img|script|link|iframe|video|audio|source|embed)\b[^>]*>/gi;
+        const attrRe = /(?:href|src)\s*=\s*("([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/gi;
+        let m;
+        while ((m = tagRe.exec(html))) {
+          const tag = m[1].toLowerCase();
+          let a;
+          attrRe.lastIndex = 0;
+          while ((a = attrRe.exec(m[0]))) {
+            const v = a[2] || a[3] || a[4];
+            if (!v || v.startsWith('#') || v.startsWith('data:')) continue;
+            if (tag === 'link' && !/stylesheet|icon|manifest|preload|preconnect|dns-prefetch/i.test(m[0])) continue;
+            add(v);
+          }
+        }
+        const cssRe = /url\(\s*(['"]?)([^'")]+)\1\s*\)/gi;
+        while ((m = cssRe.exec(html))) {
+          if (!m[2].startsWith('data:')) add(m[2]);
+        }
+        return [...urls];
+      }
+
+      function timingUrl(u) {
+        try {
+          const p = new URL(u);
+          if (location.protocol === 'https:' && p.protocol === 'http:') p.protocol = 'https:';
+          return p.href;
+        } catch (e) { return u; }
+      }
+
+      async function measureOnce(target) {
+        const url = timingUrl(target);
+        const start = performance.now();
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), SAMPLE_TIMEOUT);
+        try {
+          await fetch(url, { mode: 'no-cors', cache: 'no-store', signal: controller.signal });
+          return Math.round(performance.now() - start);
+        } catch (e) {
+          if (e.name === 'AbortError') return null;
+          return Math.round(performance.now() - start);
+        } finally {
+          clearTimeout(timer);
+        }
+      }
+
+      async function testUrl(target) {
+        const samples = [];
+        for (let i = 0; i < TEST_TIMES; i++) {
+          const ms = await measureOnce(target);
+          if (ms !== null) samples.push(ms);
+        }
+        if (samples.length === 0) return { url: target, average: null, samples: [], success: 0 };
+        const sum = samples.reduce((a, b) => a + b, 0);
+        return { url: target, average: Math.round(sum / samples.length), samples, success: samples.length };
+      }
+
+      function typeOf(url) {
+        try {
+          const p = new URL(url);
+          const path = p.pathname.toLowerCase();
+          if (/\.(css)(\?|$)/.test(path) || /styles?\./i.test(path)) return 'css';
+          if (/\.(js|mjs)(\?|$)/.test(path)) return 'js';
+          if (/\.(png|jpe?g|gif|webp|svg|avif|ico)(\?|$)/.test(path)) return 'img';
+          if (path === '/' || /\.(html?)(\?|$)/.test(path)) return 'html';
+        } catch (e) { }
+        return 'other';
+      }
+      const TAG_TEXT = { html: 'HTML', css: 'CSS', js: 'JS', img: '图片', other: '其他' };
+      const TAG_CLASS = { html: 'html', css: 'css', js: 'js', img: 'img', other: 'other' };
+
+      btn.addEventListener('click', run);
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') run(); });
+
+      async function run() {
+        const target = input.value.trim();
+        setError('');
+        if (!target) { setError('请输入网址'); return; }
+        let normalized;
+        try { normalized = new URL(/^https?:\/\//i.test(target) ? target : 'https://' + target).href; }
+        catch (e) { setError('网址格式不正确'); return; }
+
+        btn.disabled = true;
+        resultCard.classList.remove('show');
+        resultBody.innerHTML = '';
+        progressBar.style.width = '0';
+        progressWrap.classList.add('show');
+        setStatus('正在抓取页面并提取 URL...');
+
+        let urls;
+        try {
+          const html = await fetchText(normalized);
+          urls = extractUrls(html, normalized);
+        } catch (err) {
+          setError('抓取页面失败：' + err.message);
+          progressWrap.classList.remove('show');
+          btn.disabled = false;
+          return;
+        }
+
+        if (urls.length === 0) {
+          setError('未在页面中找到任何 http/https 地址');
+          progressWrap.classList.remove('show');
+          btn.disabled = false;
+          return;
+        }
+
+        setStatus('共提取到 ' + urls.length + ' 个 URL（已去重），每个测试 5 次，开始测速...');
+
+        const results = [];
+        for (let i = 0; i < urls.length; i += CONCURRENCY) {
+          const chunk = urls.slice(i, i + CONCURRENCY);
+          const chunkResults = await Promise.all(chunk.map((u) => testUrl(u)));
+          results.push(...chunkResults);
+          const done = Math.min(i + CONCURRENCY, urls.length);
+          const pct = Math.round(done / urls.length * 100);
+          progressBar.style.width = pct + '%';
+          setStatus('测速进度：' + done + ' / ' + urls.length + '（' + pct + '%）');
+        }
+
+        progressWrap.classList.remove('show');
+        results.sort((a, b) => {
+          if (a.average === null) return 1;
+          if (b.average === null) return -1;
+          return a.average - b.average;
+        });
+        render(results);
+        btn.disabled = false;
+        setStatus('测速完成，已按平均耗时从快到慢排序，点击地址可跳转。');
+      }
+
+      function render(results) {
+        resultBody.innerHTML = '';
+        const ok = results.filter((r) => r.average !== null);
+        const fail = results.filter((r) => r.average === null);
+        resultTotal.textContent = '共 ' + results.length + ' 个地址（成功 ' + ok.length + '，失败 ' + fail.length + '）';
+
+        results.forEach((r, idx) => {
+          const tr = document.createElement('tr');
+          tr.title = '点击打开：' + r.url;
+          tr.addEventListener('click', () => window.open(r.url, '_blank', 'noopener'));
+          const type = typeOf(r.url);
+
+          const rankTd = document.createElement('td');
+          rankTd.className = 'rank';
+          rankTd.textContent = idx + 1;
+
+          const urlTd = document.createElement('td');
+          urlTd.className = 'url-cell';
+          const link = document.createElement('a');
+          link.href = r.url;
+          link.target = '_blank';
+          link.rel = 'noopener';
+          link.textContent = r.url;
+          urlTd.appendChild(link);
+          const tag = document.createElement('span');
+          tag.className = 'tag ' + TAG_CLASS[type];
+          tag.textContent = TAG_TEXT[type];
+          urlTd.appendChild(tag);
+
+          const speedTd = document.createElement('td');
+          speedTd.className = 'speed' + (r.average === null ? ' fail' : '');
+          speedTd.textContent = r.average === null ? '失败' : r.average + ' ms';
+
+          const samplesTd = document.createElement('td');
+          samplesTd.className = 'samples';
+          samplesTd.textContent = r.average === null ? '—' : r.samples.join(' / ');
+
+          tr.appendChild(rankTd);
+          tr.appendChild(urlTd);
+          tr.appendChild(speedTd);
+          tr.appendChild(samplesTd);
+          resultBody.appendChild(tr);
+        });
+
+        resultCard.classList.add('show');
+      }
+    })();
+  </script>
+</body>
+</html>
