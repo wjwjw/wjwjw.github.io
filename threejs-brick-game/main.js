@@ -43,7 +43,6 @@
 	let nowBlock = null;
 	let nextBlock = null;
 	let ghostBlock = null;
-	let blocksGroup = null;
 
 	// 相机控制
 	let azimuth = 45.0;
@@ -482,6 +481,7 @@
 				nowBlock = newBlock;
 				if (gameConfig.showGhost) {
 					ghostBlock = calculateGhostBlock(nowBlock);
+					ghostDirty = true;
 				}
 			}
 		} else {
@@ -489,6 +489,7 @@
 				nowBlock = newBlock;
 				if (gameConfig.showGhost) {
 					ghostBlock = calculateGhostBlock(nowBlock);
+					ghostDirty = true;
 				}
 			}
 		}
@@ -504,6 +505,7 @@
 			nowBlock = newBlock;
 			if (gameConfig.showGhost) {
 				ghostBlock = calculateGhostBlock(nowBlock);
+				ghostDirty = true;
 			}
 		}
 	}
@@ -548,6 +550,7 @@
 			nowBlock = newBlock;
 			if (gameConfig.showGhost) {
 				ghostBlock = calculateGhostBlock(nowBlock);
+				ghostDirty = true;
 			}
 			log('改变形状成功');
 		} else {
@@ -617,6 +620,9 @@
 
 	// 预创建几何体
 	const boxGeometry = new THREE.BoxGeometry(BIG_BLOCK * 0.92, BIG_BLOCK * 0.92, BIG_BLOCK * 0.92);
+	
+	// 已落地方块：InstancedMesh（单 Draw Call）
+	const MAX_PLACED = MAP_WIDTH * MAP_HEIGHT * MAP_WIDTH; // 768
 	const placedMaterial = new THREE.MeshStandardMaterial({ 
 		color: 0x88aaff, 
 		roughness: 0.3, 
@@ -624,7 +630,14 @@
 		transparent: true,
 		opacity: 0.85
 	});
+	const placedMesh = new THREE.InstancedMesh(boxGeometry, placedMaterial, MAX_PLACED);
+	placedMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+	placedMesh.count = 0;
+	scene.add(placedMesh);
+	const placedMatrix = new THREE.Matrix4();
+	let placedDirty = true;
 	
+	// 幽灵方块材质（共享单个实例）
 	const ghostMaterial = new THREE.MeshStandardMaterial({
 		color: 0x88aaff,
 		roughness: 0.5,
@@ -633,6 +646,28 @@
 		opacity: 0.3,
 		emissive: 0x224466
 	});
+	
+	// 当前/幽灵方块复用的 Mesh（最多 4 个，开销极小）
+	const dynamicBlockGroup = new THREE.Group();
+	scene.add(dynamicBlockGroup);
+	const currentMeshes = [];
+	const ghostMeshes = [];
+	for (let i = 0; i < 4; i++) {
+		const currentMesh = new THREE.Mesh(boxGeometry, new THREE.MeshStandardMaterial({
+			roughness: 0.2, metalness: 0.05
+		}));
+		currentMesh.visible = false;
+		dynamicBlockGroup.add(currentMesh);
+		currentMeshes.push(currentMesh);
+	
+		const ghostMesh = new THREE.Mesh(boxGeometry, ghostMaterial);
+		ghostMesh.visible = false;
+		dynamicBlockGroup.add(ghostMesh);
+		ghostMeshes.push(ghostMesh);
+	}
+	let currentMeshCount = 0;
+	let ghostMeshCount = 0;
+	let ghostDirty = true;
 
 	// 方块类
 	class Blocks {
@@ -926,6 +961,7 @@
 		}
 		
 		if (linesCleared > 0) {
+			placedDirty = true;
 			const scoreIndex = Math.min(linesCleared, gameConfig.scorePerLine.length) - 1;
 			const addScore = gameConfig.scorePerLine[scoreIndex] * level;
 			score += addScore;
@@ -993,58 +1029,87 @@
 	}
 
 	function drawAllBlocks() {
-		if (!blocksGroup) {
-			blocksGroup = new THREE.Group();
-			blocksGroup.userData = { isBlocks: true };
-			scene.add(blocksGroup);
-		}
-		
-		while(blocksGroup.children.length > 0) {
-			const child = blocksGroup.children[0];
-			if (child.isMesh && child.material) {
-				child.material.dispose();
-			}
-			blocksGroup.remove(child);
-		}
-		
-		for (let i = 0; i < MAP_WIDTH; i++) {
-			for (let j = 0; j < MAP_HEIGHT; j++) {
-				for (let k = 0; k < MAP_WIDTH; k++) {
-					if (gameMap[i] && gameMap[i][j] && gameMap[i][j][k] === 1) {
-						const mesh = new THREE.Mesh(boxGeometry, placedMaterial.clone());
-						mesh.position.set(i + 0.5, j + 0.5, k + 0.5);
-						blocksGroup.add(mesh);
+		// 1. 已落地方块：仅在脏时更新 InstancedMesh
+		if (placedDirty) {
+			let index = 0;
+			for (let i = 0; i < MAP_WIDTH; i++) {
+				for (let j = 0; j < MAP_HEIGHT; j++) {
+					for (let k = 0; k < MAP_WIDTH; k++) {
+						if (gameMap[i] && gameMap[i][j] && gameMap[i][j][k] === 1) {
+							placedMatrix.makeTranslation(i + 0.5, j + 0.5, k + 0.5);
+							placedMesh.setMatrixAt(index++, placedMatrix);
+						}
 					}
 				}
 			}
+			placedMesh.count = index;
+			placedMesh.instanceMatrix.needsUpdate = true;
+			placedDirty = false;
 		}
 		
-		if (gameConfig.showGhost && ghostBlock && running) {
-			const ghostMeshes = ghostBlock.createMeshes(true);
-			ghostMeshes.forEach(mesh => {
-				if (paused) {
-					mesh.material.opacity = 0.5;
-					mesh.material.emissive = new THREE.Color(0xffaa44);
-					mesh.material.emissiveIntensity = 0.3;
+		// 2. 幽灵方块：仅脏时更新
+		if (ghostDirty && gameConfig.showGhost && ghostBlock && running) {
+			const positions = ghostBlock.getAllBlockPositions();
+			ghostMeshCount = 0;
+			for (const { x, y, z } of positions) {
+				if (ghostMeshCount < 4) {
+					const mesh = ghostMeshes[ghostMeshCount];
+					mesh.position.set(x + 0.5, y + 0.5, z + 0.5);
+					mesh.visible = true;
+					if (paused) {
+						mesh.material.opacity = 0.5;
+						mesh.material.emissive.setHex(0xffaa44);
+						mesh.material.emissiveIntensity = 0.3;
+					} else {
+						mesh.material.opacity = 0.3;
+						mesh.material.emissive.setHex(0x224466);
+						mesh.material.emissiveIntensity = 1;
+					}
+					ghostMeshCount++;
 				}
-				blocksGroup.add(mesh);
-			});
+			}
+			// 隐藏多余
+			for (let i = ghostMeshCount; i < 4; i++) {
+				ghostMeshes[i].visible = false;
+			}
+			ghostDirty = false;
 		}
 		
+		// 3. 当前方块：每帧更新位置（只有 4 个块，开销极小）
 		if (nowBlock) {
-			const meshes = nowBlock.createMeshes(false);
-			meshes.forEach(mesh => {
-				if (paused) {
-					mesh.material.transparent = true;
-					mesh.material.opacity = 0.7;
-					mesh.material.emissive = new THREE.Color(0xffaa44);
-					mesh.material.emissiveIntensity = 0.2;
+			const positions = nowBlock.getAllBlockPositions();
+			currentMeshCount = 0;
+			const color = new THREE.Color(nowBlock.color[0], nowBlock.color[1], nowBlock.color[2]);
+			const emissiveColor = new THREE.Color(nowBlock.color[0] * 0.3, nowBlock.color[1] * 0.3, nowBlock.color[2] * 0.3);
+			for (const { x, y, z } of positions) {
+				if (currentMeshCount < 4) {
+					const mesh = currentMeshes[currentMeshCount];
+					mesh.position.set(x + 0.5, y + 0.5, z + 0.5);
+					mesh.material.color.copy(color);
+					mesh.material.emissive.copy(emissiveColor);
+					mesh.visible = true;
+					if (paused) {
+						mesh.material.transparent = true;
+						mesh.material.opacity = 0.7;
+						mesh.material.emissive.setHex(0xffaa44);
+						mesh.material.emissiveIntensity = 0.2;
+					} else {
+						mesh.material.transparent = false;
+						mesh.material.opacity = 1;
+						mesh.material.emissive.copy(emissiveColor);
+						mesh.material.emissiveIntensity = 1;
+					}
+					currentMeshCount++;
 				}
-				blocksGroup.add(mesh);
-			});
+			}
+			for (let i = currentMeshCount; i < 4; i++) {
+				currentMeshes[i].visible = false;
+			}
+		} else {
+			for (let i = 0; i < 4; i++) {
+				currentMeshes[i].visible = false;
+			}
 		}
-		
-		return blocksGroup;
 	}
 
 	function updateCamera() {
@@ -1078,6 +1143,7 @@
 				gameMap[x][y][z] = 1;
 			}
 		}
+		placedDirty = true;
 		clearLines();
 	}
 
@@ -1104,6 +1170,7 @@
 		
 		if (gameConfig.showGhost) {
 			ghostBlock = calculateGhostBlock(nowBlock);
+			ghostDirty = true;
 		}
 		
 		if (checkCollision(nowBlock) !== 0) {
@@ -1124,6 +1191,7 @@
 			pauseHint.style.display = 'none';
 			if (gameConfig.showGhost) {
 				ghostBlock = calculateGhostBlock(nowBlock);
+				ghostDirty = true;
 			}
 		} else {
 			pauseHint.style.display = 'flex';
@@ -1143,6 +1211,7 @@
 		updateUI();
 		if (gameConfig.showGhost) {
 			ghostBlock = calculateGhostBlock(nowBlock);
+			ghostDirty = true;
 		}
 	}
 
@@ -1156,6 +1225,7 @@
 		nextBlock = createNewBlock();
 		if (gameConfig.showGhost) {
 			ghostBlock = calculateGhostBlock(nowBlock);
+			ghostDirty = true;
 		}
 		running = true;
 		paused = false;
@@ -1304,6 +1374,7 @@
 				nowBlock = newBlock;
 				if (gameConfig.showGhost) {
 					ghostBlock = calculateGhostBlock(nowBlock);
+					ghostDirty = true;
 				}
 			} else {
 				placeBlock(nowBlock);
@@ -1311,6 +1382,7 @@
 				nextBlock = createNewBlock();
 				if (gameConfig.showGhost) {
 					ghostBlock = calculateGhostBlock(nowBlock);
+					ghostDirty = true;
 				}
 				if (checkCollision(nowBlock) !== 0) {
 					alert(`游戏结束!\n得分: ${score}\n行数: ${lines}`);
