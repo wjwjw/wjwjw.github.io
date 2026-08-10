@@ -119,6 +119,89 @@
         throw new Error('所有代理抓取失败，请稍后再试或更换网址');
       }
 
+      function collectScriptLinks(html, pageUrl, timeout) {
+        return new Promise((resolve) => {
+          const scriptRe = /<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi;
+          const blocks = [];
+          let m;
+          while ((m = scriptRe.exec(html))) if (m[1].trim()) blocks.push(m[1]);
+          const onload = (html.match(/<body[^>]*\bonload\s*=\s*["']([^"']+)["']/i) || [])[1] || '';
+          if (blocks.length === 0) return resolve([]);
+          const u = new URL(pageUrl);
+          const workerCode = `
+            var __links = [];
+            function __makeEl() {
+              var el = {
+                href:'', src:'', innerHTML:'', innerText:'', textContent:'', title:'', id:'',
+                style:{}, className:'', disabled:false,
+                appendChild:function(){}, removeChild:function(){}, setAttribute:function(){},
+                getAttribute:function(){return null;}, addEventListener:function(){},
+                removeEventListener:function(){}, querySelector:function(){return null;},
+                querySelectorAll:function(){return [];}, focus:function(){}, click:function(){},
+                classList:{add:function(){},remove:function(){},toggle:function(){}}
+              };
+              var _h = '';
+              Object.defineProperty(el, 'href', {
+                get: function(){ return _h; },
+                set: function(v){
+                  _h = v;
+                  var s = String(v);
+                  if (s.indexOf('#') === 0 || s.indexOf('javascript:') === 0) return;
+                  if (s.indexOf('undefined') >= 0 || s.indexOf('NaN') >= 0) return;
+                  __links.push(s);
+                }
+              });
+              return el;
+            }
+            function __sandbox(document, location, navigator, window, top, parent, frames, self, screen, history, fetch, XMLHttpRequest, WebSocket, EventSource, importScripts, alert, confirm, prompt) {
+              ${blocks.map((s) => 'try {\n' + s + '\n} catch(e) {}').join('\n')}
+              ${onload ? 'try { eval(' + JSON.stringify(onload) + '); } catch(e) {}' : ''}
+            }
+            var __doc = {
+              lastModified: ${JSON.stringify(new Date(Date.now() - 86400000).toString())},
+              title:'', cookie:'', readyState:'complete',
+              body:{ onload:null, style:{}, appendChild:function(){}, innerHTML:'' },
+              documentElement:{ style:{} },
+              getElementById: function(id){ if(!__els[id]) __els[id] = __makeEl(); return __els[id]; },
+              getElementsByName: function(){ return []; },
+              getElementsByTagName: function(){ return []; },
+              getElementsByClassName: function(){ return []; },
+              querySelector: function(){ return null; },
+              querySelectorAll: function(){ return []; },
+              createElement: __makeEl,
+              createTextNode: function(){ return {}; },
+              write: function(){}, writeln: function(){},
+              addEventListener: function(){}
+            };
+            var __els = {};
+            var __loc = { href: ${JSON.stringify(pageUrl)}, protocol: '${u.protocol}', host: '${u.host}', hostname: '${u.hostname}', pathname: '${u.pathname}', search: '${u.search}', hash: '' };
+            var __nav = { userAgent: 'Mozilla/5.0', sendBeacon: function(){} };
+            var __w = { document: __doc, location: __loc, innerWidth: 1920, innerHeight: 1080, screen: {}, addEventListener: function(){}, setTimeout: setTimeout, setInterval: setInterval, clearTimeout: clearTimeout, clearInterval: clearInterval };
+            var __noopWin = { document: __doc, location: __loc, screen: {}, addEventListener: function(){}, setTimeout: setTimeout, setInterval: setInterval, clearTimeout: clearTimeout, clearInterval: clearInterval };
+            __sandbox(
+              __doc, __loc, __nav, __w, __noopWin, __noopWin, __noopWin, self, {},
+              { pushState:function(){}, replaceState:function(){}, href:'' },
+              function(){ return Promise.reject(new Error('blocked')); },
+              function(){ throw new Error('blocked'); },
+              function(){ throw new Error('blocked'); },
+              function(){ throw new Error('blocked'); },
+              function(){},
+              function(){}, function(){ return false; }, function(){ return null; }
+            );
+            try {
+              var out = [];
+              for (var id in __els) if (__els[id].href) out.push(__els[id].href);
+              postMessage({ links: out });
+            } catch(e) { postMessage({ links: [] }); }
+          `;
+          const blob = new Blob([workerCode], { type: 'text/javascript' });
+          const worker = new Worker(URL.createObjectURL(blob));
+          const timer = setTimeout(() => { worker.terminate(); resolve([]); }, timeout);
+          worker.onmessage = (e) => { clearTimeout(timer); worker.terminate(); resolve(e.data && e.data.links ? e.data.links : []); };
+          worker.onerror = () => { clearTimeout(timer); worker.terminate(); resolve([]); };
+        });
+      }
+
       function extractUrls(html, base) {
         const urls = new Set();
         const add = (raw) => {
@@ -233,6 +316,15 @@
         try {
           const html = await fetchText(normalized);
           urls = extractUrls(html, normalized);
+          setStatus('正在提取 JS 动态生成的地址...');
+          const dynamic = await collectScriptLinks(html, normalized, 8000);
+          dynamic.forEach((raw) => {
+            try {
+              const u = new URL(raw, normalized);
+              if (u.protocol === 'http:' || u.protocol === 'https:') urls.push(u.href);
+            } catch (e) { }
+          });
+          urls = [...new Set(urls)];
         } catch (err) {
           setError('抓取页面失败：' + err.message);
           progressWrap.classList.remove('show');
