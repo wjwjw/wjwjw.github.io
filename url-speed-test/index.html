@@ -196,6 +196,14 @@
       const TAG_TEXT = { html: 'HTML', css: 'CSS', js: 'JS', img: '图片', other: '其他' };
       const TAG_CLASS = { html: 'html', css: 'css', js: 'js', img: 'img', other: 'other' };
 
+      function sameSite(url, base) {
+        try {
+          const a = new URL(url).hostname.replace(/^www\./, '');
+          const b = new URL(base).hostname.replace(/^www\./, '');
+          return a === b;
+        } catch (e) { return false; }
+      }
+
       btn.addEventListener('click', run);
       input.addEventListener('keydown', (e) => { if (e.key === 'Enter') run(); });
 
@@ -232,7 +240,16 @@
           return;
         }
 
-        setStatus('共提取到 ' + urls.length + ' 个 URL（已去重），每个测试 5 次，开始测速...');
+        const skipped = urls.filter((u) => sameSite(u, normalized)).length;
+        urls = urls.filter((u) => !sameSite(u, normalized));
+        if (urls.length === 0) {
+          setError('页面中的地址全部属于本站（' + normalized + '），已忽略，无需测速');
+          progressWrap.classList.remove('show');
+          btn.disabled = false;
+          return;
+        }
+
+        setStatus('共提取到 ' + urls.length + ' 个 URL（已去重' + (skipped ? '，忽略本站 ' + skipped + ' 个' : '') + '），每个测试 5 次，开始测速...');
 
         const results = [];
         for (let i = 0; i < urls.length; i += CONCURRENCY) {
