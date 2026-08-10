@@ -42,6 +42,7 @@
     .url-cell a:hover { color: #90caf9; }
     .speed { font-weight: 700; color: #4caf50; min-width: 84px; }
     .speed.fail { color: #ef5350; }
+    .speed.pending { color: #ffb300; }
     .samples { color: #6b7280; font-size: 11px; }
     .tag { display: inline-block; font-size: 10px; padding: 2px 7px; border-radius: 9px; margin-left: 8px; vertical-align: 2px; }
     .tag.html { background: #0d2538; color: #4fc3f7; }
@@ -94,6 +95,7 @@
 
       const TEST_TIMES = 5;
       const SAMPLE_TIMEOUT = 15000;
+      const URL_TIMEOUT = 120000;
       const CONCURRENCY = 4;
       const PROXIES = [
         (u) => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
@@ -171,11 +173,16 @@
         }
       }
 
-      async function testUrl(target) {
+      async function testUrl(target, onSample) {
         const samples = [];
+        const overallStart = Date.now();
         for (let i = 0; i < TEST_TIMES; i++) {
+          if (Date.now() - overallStart >= URL_TIMEOUT) {
+            return { url: target, average: null, samples, success: samples.length, timeout: true };
+          }
           const ms = await measureOnce(target);
           if (ms !== null) samples.push(ms);
+          if (onSample) onSample(i + 1);
         }
         if (samples.length === 0) return { url: target, average: null, samples: [], success: 0 };
         const sum = samples.reduce((a, b) => a + b, 0);
@@ -249,41 +256,48 @@
           return;
         }
 
-        setStatus('共提取到 ' + urls.length + ' 个 URL（已去重' + (skipped ? '，忽略本站 ' + skipped + ' 个' : '') + '），每个测试 5 次，开始测速...');
+        setStatus('共提取到 ' + urls.length + ' 个 URL（已去重' + (skipped ? '，忽略本站 ' + skipped + ' 个' : '') + '），开始测速...');
 
-        const results = [];
-        for (let i = 0; i < urls.length; i += CONCURRENCY) {
-          const chunk = urls.slice(i, i + CONCURRENCY);
-          const chunkResults = await Promise.all(chunk.map((u) => testUrl(u)));
-          results.push(...chunkResults);
-          const done = Math.min(i + CONCURRENCY, urls.length);
-          const pct = Math.round(done / urls.length * 100);
-          progressBar.style.width = pct + '%';
-          setStatus('测速进度：' + done + ' / ' + urls.length + '（' + pct + '%）');
+        renderInitial(urls);
+
+        let done = 0;
+        let next = 0;
+        async function runner() {
+          while (next < urls.length) {
+            const i = next++;
+            const target = urls[i];
+            const result = await testUrl(target, (k) => {
+              const row = rowMap.get(target);
+              if (row && !row.done) row.samplesTd.textContent = '测试中 ' + k + '/' + TEST_TIMES;
+            });
+            done++;
+            applyResult(target, result);
+            const pct = Math.round(done / urls.length * 100);
+            progressBar.style.width = pct + '%';
+            setStatus('测速进度：' + done + ' / ' + urls.length + '（' + pct + '%），已完成的可直接点击打开');
+          }
         }
+        const runners = [];
+        for (let k = 0; k < Math.min(CONCURRENCY, urls.length); k++) runners.push(runner());
+        await Promise.all(runners);
 
         progressWrap.classList.remove('show');
-        results.sort((a, b) => {
-          if (a.average === null) return 1;
-          if (b.average === null) return -1;
-          return a.average - b.average;
-        });
-        render(results);
         btn.disabled = false;
         setStatus('测速完成，已按平均耗时从快到慢排序，点击地址可跳转。');
       }
 
-      function render(results) {
-        resultBody.innerHTML = '';
-        const ok = results.filter((r) => r.average !== null);
-        const fail = results.filter((r) => r.average === null);
-        resultTotal.textContent = '共 ' + results.length + ' 个地址（成功 ' + ok.length + '，失败 ' + fail.length + '）';
+      const rowMap = new Map();
 
-        results.forEach((r, idx) => {
+      function renderInitial(urls) {
+        resultBody.innerHTML = '';
+        resultCard.classList.add('show');
+        resultTotal.textContent = '共 ' + urls.length + ' 个地址，测试中...';
+
+        urls.forEach((url, idx) => {
           const tr = document.createElement('tr');
-          tr.title = '点击打开：' + r.url;
-          tr.addEventListener('click', () => window.open(r.url, '_blank', 'noopener'));
-          const type = typeOf(r.url);
+          tr.title = '点击打开：' + url;
+          tr.addEventListener('click', () => window.open(url, '_blank', 'noopener'));
+          const type = typeOf(url);
 
           const rankTd = document.createElement('td');
           rankTd.className = 'rank';
@@ -292,10 +306,10 @@
           const urlTd = document.createElement('td');
           urlTd.className = 'url-cell';
           const link = document.createElement('a');
-          link.href = r.url;
+          link.href = url;
           link.target = '_blank';
           link.rel = 'noopener';
-          link.textContent = r.url;
+          link.textContent = url;
           urlTd.appendChild(link);
           const tag = document.createElement('span');
           tag.className = 'tag ' + TAG_CLASS[type];
@@ -303,21 +317,53 @@
           urlTd.appendChild(tag);
 
           const speedTd = document.createElement('td');
-          speedTd.className = 'speed' + (r.average === null ? ' fail' : '');
-          speedTd.textContent = r.average === null ? '失败' : r.average + ' ms';
+          speedTd.className = 'speed pending';
+          speedTd.textContent = '测试中...';
 
           const samplesTd = document.createElement('td');
           samplesTd.className = 'samples';
-          samplesTd.textContent = r.average === null ? '—' : r.samples.join(' / ');
 
           tr.appendChild(rankTd);
           tr.appendChild(urlTd);
           tr.appendChild(speedTd);
           tr.appendChild(samplesTd);
           resultBody.appendChild(tr);
-        });
 
-        resultCard.classList.add('show');
+          rowMap.set(url, { tr, rankTd, speedTd, samplesTd, avg: null, done: false });
+        });
+      }
+
+      function applyResult(url, result) {
+        const row = rowMap.get(url);
+        if (!row) return;
+        row.done = true;
+        if (result.average === null) {
+          row.avg = null;
+          row.speedTd.className = 'speed fail';
+          row.speedTd.textContent = result.timeout ? '超时' : '失败';
+          row.samplesTd.textContent = result.timeout ? '超过 ' + Math.round(URL_TIMEOUT / 1000) + 's 未完成' : '—';
+        } else {
+          row.avg = result.average;
+          row.speedTd.className = 'speed';
+          row.speedTd.textContent = result.average + ' ms';
+          row.samplesTd.textContent = result.samples.join(' / ');
+        }
+        const ok = [...rowMap.values()].filter((r) => r.done && r.avg !== null).length;
+        const fail = [...rowMap.values()].filter((r) => r.done && r.avg === null).length;
+        resultTotal.textContent = '共 ' + rowMap.size + ' 个地址（已完成 ' + ok + ' 个成功，' + fail + ' 个失败）';
+        resortRows();
+      }
+
+      function resortRows() {
+        const all = [...rowMap.values()];
+        const sorted = all
+          .filter((r) => r.done && r.avg !== null)
+          .sort((a, b) => a.avg - b.avg);
+        const rest = all.filter((r) => !(r.done && r.avg !== null));
+        sorted.concat(rest).forEach((row, i) => {
+          row.rankTd.textContent = i + 1;
+          resultBody.appendChild(row.tr);
+        });
       }
     })();
   </script>
