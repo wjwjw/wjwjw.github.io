@@ -22,6 +22,8 @@
     }
     button:hover:not(:disabled) { background: #1976d2; }
     button:disabled { background: #375a75; cursor: not-allowed; }
+    button.danger { background: #dc3545; margin-left: 8px; }
+    button.danger:hover:not(:disabled) { background: #b02a37; }
     #status { margin-top: 16px; font-size: 13px; color: #999; min-height: 18px; word-break: break-all; }
     .progress-wrap { margin-top: 10px; height: 8px; background: #222; border-radius: 4px; overflow: hidden; display: none; }
     .progress-wrap.show { display: block; }
@@ -60,6 +62,7 @@
     <div class="input-row">
       <input id="urlInput" type="text" placeholder="https://example.com" spellcheck="false" />
       <button id="startBtn">开始测速</button>
+      <button id="stopBtn" style="display:none" class="danger">停止</button>
     </div>
     <div id="errorBox"></div>
     <div id="status"></div>
@@ -85,6 +88,7 @@
     (function () {
       const input = document.getElementById('urlInput');
       const btn = document.getElementById('startBtn');
+      const stopBtn = document.getElementById('stopBtn');
       const statusEl = document.getElementById('status');
       const errorBox = document.getElementById('errorBox');
       const progressWrap = document.getElementById('progressWrap');
@@ -240,13 +244,24 @@
         } catch (e) { return u; }
       }
 
+      let stopRequested = false;
+      let sessionController = null;
+
+      function stop() {
+        stopRequested = true;
+        if (sessionController) sessionController.abort();
+      }
+
       async function measureOnce(target) {
         const url = timingUrl(target);
         const start = performance.now();
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), SAMPLE_TIMEOUT);
+        const signal = sessionController && typeof AbortSignal.any === 'function'
+          ? AbortSignal.any([controller.signal, sessionController.signal])
+          : controller.signal;
         try {
-          await fetch(url, { mode: 'no-cors', cache: 'no-store', signal: controller.signal });
+          await fetch(url, { mode: 'no-cors', cache: 'no-store', signal });
           return Math.round(performance.now() - start);
         } catch (e) {
           if (e.name === 'AbortError') return null;
@@ -260,6 +275,7 @@
         const samples = [];
         const overallStart = Date.now();
         for (let i = 0; i < TEST_TIMES; i++) {
+          if (stopRequested) return { url: target, average: null, samples, stopped: true };
           if (Date.now() - overallStart >= URL_TIMEOUT) {
             return { url: target, average: null, samples, success: samples.length, timeout: true };
           }
@@ -295,6 +311,7 @@
       }
 
       btn.addEventListener('click', run);
+      stopBtn.addEventListener('click', () => { stopBtn.disabled = true; stop(); });
       input.addEventListener('keydown', (e) => { if (e.key === 'Enter') run(); });
 
       async function run() {
@@ -305,7 +322,11 @@
         try { normalized = new URL(/^https?:\/\//i.test(target) ? target : 'https://' + target).href; }
         catch (e) { setError('网址格式不正确'); return; }
 
+        stopRequested = false;
+        sessionController = new AbortController();
         btn.disabled = true;
+        stopBtn.style.display = 'inline-block';
+        stopBtn.disabled = false;
         resultCard.classList.remove('show');
         resultBody.innerHTML = '';
         progressBar.style.width = '0';
@@ -355,7 +376,7 @@
         let done = 0;
         let next = 0;
         async function runner() {
-          while (next < urls.length) {
+          while (next < urls.length && !stopRequested) {
             const i = next++;
             const target = urls[i];
             const result = await testUrl(target, (k) => {
@@ -374,8 +395,22 @@
         await Promise.all(runners);
 
         progressWrap.classList.remove('show');
+        stopBtn.style.display = 'none';
         btn.disabled = false;
-        setStatus('测速完成，已按平均耗时从快到慢排序，点击地址可跳转。');
+        if (stopRequested) {
+          rowMap.forEach((row) => {
+            if (!row.done) {
+              row.done = true;
+              row.speedTd.className = 'speed fail';
+              row.speedTd.textContent = '已停止';
+              row.samplesTd.textContent = '—';
+            }
+          });
+          resortRows();
+          setStatus('已停止测速，显示当前已完成的结果（前几名可直接点击打开）。');
+        } else {
+          setStatus('测速完成，已按平均耗时从快到慢排序，点击地址可跳转。');
+        }
       }
 
       const rowMap = new Map();
