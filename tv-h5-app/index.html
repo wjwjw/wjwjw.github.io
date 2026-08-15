@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>掌中灵 TV 游戏厅</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div id="tv-app">
+    <header class="topbar">
+      <div class="brand"><span class="brand-logo">🎮</span> 掌中灵 <span class="brand-sub">TV 游戏厅</span></div>
+      <div class="mode-tag" id="modeTag">本地调试</div>
+    </header>
+
+    <main class="stage">
+      <section class="menu-wrap">
+        <div class="menu" id="menu" aria-label="游戏菜单"></div>
+      </section>
+
+      <aside class="preview" id="preview">
+        <div class="preview-icon" id="pvIcon">🎮</div>
+        <h2 class="preview-title" id="pvTitle">选择游戏</h2>
+        <p class="preview-desc" id="pvDesc">用方向键浏览，按 OK 开始。</p>
+        <div class="preview-status" id="pvStatus"></div>
+        <ul class="preview-tips">
+          <li><b>← ↑ → ↓</b> 移动光标</li>
+          <li><b>OK / 确认</b> 进入游戏</li>
+          <li><b>返回</b> 退回菜单 / 退出</li>
+        </ul>
+      </aside>
+    </main>
+
+    <footer class="hintbar">
+      <span class="hint"><kbd>方向键</kbd> 移动</span>
+      <span class="hint"><kbd>OK</kbd> 进入</span>
+      <span class="hint"><kbd>返回</kbd> 退出 / 返回菜单</span>
+    </footer>
+
+    <div class="toast" id="toast" aria-live="polite"></div>
+
+    <div class="game-overlay" id="gameOverlay" aria-hidden="true">
+      <button class="back-btn" id="backBtn" type="button">← 返回菜单</button>
+      <iframe id="gameFrame" frameborder="0" allow="autoplay; fullscreen; gamepad"></iframe>
+    </div>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/launcher.js"></script>
+</body>
+</html>

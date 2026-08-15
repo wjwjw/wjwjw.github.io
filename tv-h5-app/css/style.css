@@ -1,0 +1,234 @@
+/* ============================================================
+ *  掌中灵 TV 游戏厅 —— 样式（面向 1080p 电视，逻辑视口约 960×540）
+ * ============================================================ */
+:root {
+  --bg-0: #0b0e1a;
+  --bg-1: #121832;
+  --panel: rgba(255, 255, 255, 0.04);
+  --panel-line: rgba(255, 255, 255, 0.10);
+  --text: #eef2ff;
+  --text-dim: #9aa3c0;
+  --accent: #5a8dee;
+  --ok: #46d39a;
+  --wip: #f2b34a;
+  --card-w: 200px;
+  --gap: 22px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg-0);
+  color: var(--text);
+  font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+#tv-app {
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background:
+    radial-gradient(1200px 600px at 80% -10%, rgba(90, 141, 238, 0.18), transparent 60%),
+    radial-gradient(900px 500px at 0% 110%, rgba(70, 211, 154, 0.12), transparent 55%),
+    linear-gradient(160deg, var(--bg-1), var(--bg-0));
+}
+
+/* ---------------- 顶栏 ---------------- */
+.topbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 36px;
+}
+.brand { font-size: 30px; font-weight: 800; letter-spacing: 1px; }
+.brand-logo { font-size: 30px; }
+.brand-sub { color: var(--text-dim); font-weight: 600; font-size: 22px; }
+.mode-tag {
+  font-size: 16px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(90, 141, 238, 0.16);
+  color: #bcd2ff;
+  border: 1px solid rgba(90, 141, 238, 0.35);
+}
+.mode-tag.remote {
+  background: rgba(70, 211, 154, 0.14);
+  color: #9ff0d2;
+  border-color: rgba(70, 211, 154, 0.4);
+}
+
+/* ---------------- 主体 ---------------- */
+.stage {
+  flex: 1 1 auto;
+  display: flex;
+  gap: 28px;
+  padding: 4px 36px 8px;
+  min-height: 0;
+}
+
+.menu-wrap {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 10px 6px 24px;
+  scrollbar-width: thin;
+}
+.menu-wrap::-webkit-scrollbar { width: 6px; }
+.menu-wrap::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
+
+.menu {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--card-w), 1fr));
+  gap: var(--gap);
+}
+
+/* ---------------- 游戏卡片 ---------------- */
+.card {
+  --card-color: var(--accent);
+  position: relative;
+  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+  border: 1.5px solid var(--panel-line);
+  border-radius: 18px;
+  padding: 22px 18px 18px;
+  text-align: center;
+  cursor: pointer;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+  transform: scale(1);
+  will-change: transform;
+}
+.card:hover { border-color: rgba(255,255,255,0.25); }
+
+.card.selected {
+  transform: scale(1.10);
+  border-color: var(--card-color);
+  background: linear-gradient(180deg, rgba(90,141,238,0.18), rgba(255,255,255,0.03));
+  box-shadow:
+    0 0 0 2px var(--card-color),
+    0 14px 40px rgba(0, 0, 0, 0.55),
+    0 0 36px rgba(90, 141, 238, 0.45);
+  z-index: 5;
+}
+
+.card-icon { font-size: 64px; line-height: 1; margin-bottom: 12px; }
+.card-title { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+.card-sub { font-size: 14px; color: var(--text-dim); min-height: 20px; }
+
+.card-badge {
+  position: absolute;
+  top: 12px; right: 12px;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+.card-badge.ok { background: rgba(70,211,154,0.18); color: var(--ok); }
+.card-badge.wip { background: rgba(242,179,74,0.18); color: var(--wip); }
+
+.card.wip { opacity: 0.55; filter: grayscale(0.4); }
+.card.wip.selected { opacity: 0.85; filter: grayscale(0.1); }
+
+/* ---------------- 右侧预览面板 ---------------- */
+.preview {
+  flex: 0 0 320px;
+  background: var(--panel);
+  border: 1px solid var(--panel-line);
+  border-radius: 20px;
+  padding: 28px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+.preview-icon { font-size: 88px; line-height: 1; margin: 10px 0 16px; }
+.preview-title { font-size: 28px; margin: 0 0 10px; }
+.preview-desc { font-size: 16px; color: var(--text-dim); margin: 0 0 14px; line-height: 1.5; }
+.preview-status { font-size: 15px; margin-bottom: 18px; }
+.preview-status .status.ok { color: var(--ok); }
+.preview-status .status.wip { color: var(--wip); }
+.preview-tips {
+  list-style: none;
+  padding: 16px 0 0;
+  margin: auto 0 0;
+  width: 100%;
+  border-top: 1px solid var(--panel-line);
+  font-size: 14px;
+  color: var(--text-dim);
+  text-align: left;
+}
+.preview-tips li { margin: 8px 0; }
+.preview-tips b { color: var(--text); }
+
+/* ---------------- 底部提示条 ---------------- */
+.hintbar {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 26px;
+  justify-content: center;
+  padding: 12px 0 18px;
+  color: var(--text-dim);
+  font-size: 15px;
+}
+.hint kbd {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid var(--panel-line);
+  border-radius: 6px;
+  padding: 2px 8px;
+  margin-right: 6px;
+  color: var(--text);
+  font-size: 13px;
+}
+
+/* ---------------- Toast ---------------- */
+.toast {
+  position: absolute;
+  left: 50%;
+  bottom: 84px;
+  transform: translateX(-50%) translateY(20px);
+  background: rgba(20, 24, 44, 0.95);
+  border: 1px solid var(--panel-line);
+  color: var(--text);
+  padding: 14px 26px;
+  border-radius: 12px;
+  font-size: 17px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  z-index: 50;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ---------------- 游戏覆盖层 ---------------- */
+.game-overlay {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;   /* 兼容 Android 6.0 WebView（不支持 inset） */
+  background: #000;
+  display: none;
+  z-index: 100;
+}
+.game-overlay.open { display: block; }
+#gameFrame {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #000;
+}
+.back-btn {
+  position: absolute;
+  top: 18px; left: 18px;
+  z-index: 110;
+  font-size: 16px;
+  padding: 10px 18px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.25);
+  background: rgba(20, 24, 44, 0.7);
+  color: #fff;
+  cursor: pointer;
+}
+.back-btn:hover { background: rgba(40, 46, 74, 0.9); }
