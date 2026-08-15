@@ -1,0 +1,14 @@
+/* _template/style.css —— 仅作补充，基础样式来自 ../shared/base.css */
+#game {
+  background: #11151c;
+  border-radius: 12px;
+}
+h1 {
+  font-size: 40px;
+  margin-bottom: 24px;
+}
+.overlay p {
+  color: #9aa3b2;
+  margin-top: 16px;
+  font-size: 18px;
+}

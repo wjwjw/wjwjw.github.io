@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>模板游戏</title>
+  <link rel="stylesheet" href="../shared/base.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="stage">
+    <canvas id="game"></canvas>
+
+    <!-- 开始界面：主按钮 autofocus，OK 可激活 -->
+    <div id="startScreen" class="overlay">
+      <h1>模板游戏</h1>
+      <button id="btnStart" class="tv-focus" data-tv-focus autofocus>开始游戏</button>
+      <p>方向键 / WASD 移动 · OK 确认</p>
+    </div>
+  </div>
+
+  <!-- 经典脚本（兼容 Android 6 WebView，不用 ES module） -->
+  <script src="../shared/input.js"></script>
+  <script src="../shared/nav.js"></script>
+  <script src="main.js"></script>
+</body>
+</html>

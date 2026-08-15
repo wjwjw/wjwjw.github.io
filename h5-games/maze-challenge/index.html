@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>迷宫闯关 · 像素冒险</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div id="app">
+  <!-- 游戏画布 -->
+  <div id="stage">
+    <canvas id="game"></canvas>
+    <!-- 顶部 HUD -->
+    <div id="hud" class="hidden">
+      <div id="hearts" class="hearts"></div>
+      <div id="levelName" class="level-name">第 1 关</div>
+      <div class="hud-btns">
+        <button id="btnMute" class="icon-btn" title="静音">♪</button>
+        <button id="btnRestart" class="icon-btn" title="重来">↻</button>
+        <button id="btnPause" class="icon-btn" title="暂停">⏸</button>
+      </div>
+    </div>
+    <!-- 触屏方向键（TV 上自动隐藏） -->
+    <div id="dpad" class="hidden">
+      <button class="dpad-btn up" data-dir="up">▲</button>
+      <button class="dpad-btn left" data-dir="left">◀</button>
+      <button class="dpad-btn down" data-dir="down">▼</button>
+      <button class="dpad-btn right" data-dir="right">▶</button>
+    </div>
+  </div>
+
+  <!-- 开始页 -->
+  <div id="startScreen" class="overlay">
+    <div class="card">
+      <div class="title-emoji">小恐龙 · 小猫 · 外星人</div>
+      <h1>迷宫闯关</h1>
+      <p class="subtitle">像素小冒险 · 电子音乐</p>
+      <button id="btnStart" class="big-btn tv-focus">开始游戏</button>
+      <p class="hint">用遥控器方向键移动焦点，按「确认」开始；游戏中按方向键移动角色</p>
+    </div>
+  </div>
+
+  <!-- 选择页：角色 + 关卡 -->
+  <div id="selectScreen" class="overlay hidden">
+    <div class="card wide">
+      <h2>选择你的小伙伴</h2>
+      <div id="charPicker" class="char-picker"></div>
+      <h2>选择关卡</h2>
+      <div id="levelPicker" class="level-picker"></div>
+      <button id="btnBackStart" class="text-btn tv-focus">← 返回</button>
+    </div>
+  </div>
+
+  <!-- 通关页 -->
+  <div id="winScreen" class="overlay hidden">
+    <div class="card">
+      <div class="title-emoji">★</div>
+      <h2 id="winTitle">通关啦！</h2>
+      <div id="winStars" class="stars"></div>
+      <p id="winTip" class="subtitle"></p>
+      <div class="btn-row">
+        <button id="btnNext" class="big-btn tv-focus">下一关 →</button>
+        <button id="btnReplayWin" class="text-btn tv-focus">再玩一次</button>
+        <button id="btnMenuWin" class="text-btn tv-focus">选关</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 失败页（温柔重来） -->
+  <div id="loseScreen" class="overlay hidden">
+    <div class="card">
+      <div class="title-emoji">✦</div>
+      <h2>没关系，再来一次！</h2>
+      <p class="subtitle">这一次小心地刺和怪兽就好啦</p>
+      <div class="btn-row">
+        <button id="btnReplayLose" class="big-btn tv-focus">再来一次</button>
+        <button id="btnMenuLose" class="text-btn tv-focus">选关</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 暂停页 -->
+  <div id="pauseScreen" class="overlay hidden">
+    <div class="card">
+      <h2>暂停中</h2>
+      <div class="btn-row">
+        <button id="btnResume" class="big-btn tv-focus">继续</button>
+        <button id="btnRestartPause" class="text-btn tv-focus">重来本关</button>
+        <button id="btnMenuPause" class="text-btn tv-focus">选关</button>
+        <button id="btnMutePause" class="text-btn tv-focus">♪ 声音</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="js/levels.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

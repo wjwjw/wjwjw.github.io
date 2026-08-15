@@ -1,0 +1,63 @@
+/* shared/base.css —— TV 友好基础样式（经典 CSS，兼容 Android 6 WebView） */
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  width: 100%;
+  height: 100%;
+  background: #0e1116;
+  color: #f2f4f8;
+  font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  overflow: hidden;
+}
+
+/* 可聚焦元素：明显的 TV 焦点环（用 outline，兼容老浏览器） */
+.tv-focus, [data-tv-focus], button { outline: none; }
+
+.tv-focus:focus,
+[data-tv-focus]:focus,
+button:focus,
+.tv-focus.sel {
+  outline: 4px solid #5a8dee;
+  outline-offset: 2px;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  background: #1c2230;
+  border: 2px solid #2c3650;
+  border-radius: 10px;
+  padding: 14px 28px;
+  min-width: 160px;
+  min-height: 56px;   /* 10-foot UI：可聚焦目标足够大 */
+  font-size: 20px;
+}
+button:hover, button.sel { background: #243049; }
+
+/* 全屏覆盖层：用 top/right/bottom/left 而非 inset（Android 6 不支持 inset） */
+.overlay {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: rgba(0, 0, 0, 0.92);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 5%;
+  z-index: 10;
+}
+.overlay.hidden { display: none; }
+
+#stage { position: relative; width: 100%; height: 100%; }
+
+canvas {
+  display: block;
+  margin: 0 auto;
+  touch-action: none;
+}
