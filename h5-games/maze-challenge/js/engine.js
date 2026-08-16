@@ -158,7 +158,8 @@
       this.animT = 0;
       this.moveLock = MOVE_COOLDOWN; // 启动移动冷却：0.5s 内不可再移动
       if (dist > 0) this.shakeT = Math.max(this.shakeT, 0.22);
-      if (this.cellAt(this.px, this.py) === "E") { this.win(); return; }
+      // 到达终点不在此立即通关：交给 update() 在滑入动画(animT→1)播完后判定，
+      // 确保角色完全滑入并停在终点格后才弹出通关，避免"角色尚未进入就秒通关"。
       if (this.hearts <= 0) { this.lose(); return; }
     }
 
@@ -269,6 +270,11 @@
       if (this.animT < 1) this.animT = Math.min(1, this.animT + dt / this.animDur);
       for (const m of this.monsters) this.updateMonster(m, dt);
       this.checkMonster();
+      // 角色已完全滑入终点格(animT≥1)才判定通关：
+      // 等滑入动画播放完毕、角色确实停在终点，再显示通关画面。
+      if (this.state === "playing" && this.animT >= 1 && this.cellAt(this.px, this.py) === "E") {
+        this.win();
+      }
     }
 
     win() {
