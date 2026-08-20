@@ -16,8 +16,8 @@ hs_err_pid*
 # 记忆库（含个人笔记 / 局域网 IP 等，绝不入库）
 .workbuddy/
 
-# Android 构建产物：APK、签名密钥、dex、资源扁平文件、真机截图
-tv-h5-app/android/build/
+# Android 原生 app 仅本地保留，整个目录不入库（源码/APK/密钥/构建产物）
+tv-h5-app/android/
 *.apk
 *.apk.idsig
 *.keystore
