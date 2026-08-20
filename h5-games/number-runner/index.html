@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>数字跑酷 3D · Number Runner</title>
+  <link rel="stylesheet" href="../shared/base.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div id="app">
+  <div id="stage">
+    <canvas id="game"></canvas>
+
+    <!-- 游戏内 HUD（DOM 覆盖层，每帧由 game.js 更新） -->
+    <div id="hud" class="hidden">
+      <div class="hud-top">
+        <div id="levelName" class="hud-pill">第 1 关</div>
+        <div id="valueChip" class="hud-pill"><span id="valueText">2</span></div>
+        <div class="hud-pill">分数 <span id="scoreText">0</span></div>
+        <div class="hud-pill">最高 <span id="bestText">0</span></div>
+        <div id="lives" class="hud-pill"></div>
+      </div>
+      <div id="comboTag" class="hidden">连击 x2!</div>
+      <div id="bossBar" class="hidden">
+        <div id="bossName">BOSS</div>
+        <div class="boss-track"><div id="bossFill"></div></div>
+      </div>
+      <div id="toast" class="hidden"></div>
+    </div>
+  </div>
+
+  <!-- 开始界面 -->
+  <div id="startScreen" class="overlay">
+    <div class="card">
+      <div class="title-tag">NUMBER RUNNER 3D</div>
+      <h1>数字跑酷</h1>
+      <p class="subtitle">3D 跑酷 · 合并相同数字 · 挑战 Boss</p>
+      <div class="howto">
+        <p>左右切换车道，去撞<b>和自己身上一样的数字</b>，数字就会翻倍！</p>
+        <p>躲开炸弹和香蕉，香蕉会让你滑倒扣分；吃<b>传送门</b>瞬间前进，吃<b>变小药水</b>可躲大摆锤。</p>
+        <p>每关末尾有 Boss，靠合并数字 accumulated 伤害打败它。</p>
+      </div>
+      <p class="best-line">最高分：<span id="startBest">0</span></p>
+      <button id="btnStart" class="big-btn tv-focus" data-tv-focus autofocus>开始游戏</button>
+      <p class="hint">方向键 / WASD 换道 · OK 确认 · 返回键暂停</p>
+    </div>
+  </div>
+
+  <!-- 关卡选择 -->
+  <div id="levelScreen" class="overlay hidden">
+    <div class="card wide">
+      <h2>选择关卡</h2>
+      <div id="levelGrid" class="level-grid"></div>
+      <button id="btnLevelBack" class="text-btn tv-focus" data-tv-focus>返回</button>
+    </div>
+  </div>
+
+  <!-- 暂停 -->
+  <div id="pauseScreen" class="overlay hidden">
+    <div class="card">
+      <h2>暂停中</h2>
+      <div class="btn-row">
+        <button id="btnResume" class="big-btn tv-focus" data-tv-focus>继续</button>
+        <button id="btnRestartPause" class="text-btn tv-focus" data-tv-focus>重来本关</button>
+        <button id="btnMutePause" class="text-btn tv-focus" data-tv-focus>声音</button>
+        <button id="btnMenuPause" class="text-btn tv-focus" data-tv-focus>选关</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 结束 -->
+  <div id="gameoverScreen" class="overlay hidden">
+    <div class="card">
+      <div class="title-tag">GAME OVER</div>
+      <h2 id="overTitle">这局结束啦</h2>
+      <div class="score-box">
+        <div class="score-item"><span class="score-label">本局分数</span><span id="finalScore" class="score-num">0</span></div>
+        <div class="score-item"><span class="score-label">最高分</span><span id="bestScore" class="score-num">0</span></div>
+      </div>
+      <p id="overTip" class="subtitle"></p>
+      <div class="btn-row">
+        <button id="btnReplay" class="big-btn tv-focus" data-tv-focus>再来一次</button>
+        <button id="btnMenu" class="text-btn tv-focus" data-tv-focus>选关</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 胜利 -->
+  <div id="victoryScreen" class="overlay hidden">
+    <div class="card">
+      <div class="title-tag">VICTORY</div>
+      <h2>通关啦！</h2>
+      <p id="victoryTip" class="subtitle">你击败了所有 Boss！</p>
+      <div class="score-box">
+        <div class="score-item"><span class="score-label">最终分数</span><span id="victoryScore" class="score-num">0</span></div>
+      </div>
+      <div class="btn-row">
+        <button id="btnVictoryMenu" class="big-btn tv-focus" data-tv-focus>选关</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- WebGL 不可用降级提示 -->
+  <div id="nowebgl" class="overlay hidden">
+    <div class="card">
+      <h2>无法启动 3D</h2>
+      <p class="subtitle">当前环境不支持 WebGL，请在支持 WebGL 的浏览器中打开。</p>
+    </div>
+  </div>
+</div>
+
+<!-- 经典脚本（兼容 Android 6 WebView，不用 ES module） -->
+<script src="../assets/vendor/three.min.js"></script>
+<script src="../shared/input.js"></script>
+<script src="../shared/nav.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>

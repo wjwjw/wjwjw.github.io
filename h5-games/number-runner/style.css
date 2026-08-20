@@ -1,0 +1,156 @@
+/* number-runner/style.css —— 仅作补充，基础样式来自 ../shared/base.css
+ * 兼容约束：用 flex（不用 grid / gap / inset / color-mix / min()），
+ * 核心图形全部 three.js / CanvasTexture 绘制，不依赖 emoji。 */
+
+#app, #stage { position: relative; width: 100%; height: 100%; }
+#game { display: block; margin: 0 auto; background: #0b0e14; touch-action: none; }
+
+/* 游戏内 HUD */
+#hud { position: absolute; top: 0; left: 0; right: 0; z-index: 6; padding: 12px; pointer-events: none; }
+#hud.hidden { display: none; }
+.hud-top { display: flex; flex-wrap: wrap; }
+.hud-pill {
+  background: rgba(17, 21, 28, 0.72);
+  border: 1px solid #2c3650;
+  border-radius: 10px;
+  padding: 6px 12px;
+  margin: 4px;
+  font-size: 16px;
+  color: #e6ebf3;
+  display: flex;
+  align-items: center;
+}
+#valueChip { font-weight: bold; }
+#valueText { font-size: 20px; padding: 0 2px; }
+/* 生命用小方块表示，避免 emoji 字体差异 */
+#lives .pip {
+  display: inline-block;
+  width: 16px; height: 16px;
+  margin: 0 3px;
+  border-radius: 4px;
+  background: #ff5d73;
+  box-shadow: 0 0 0 2px rgba(255,93,115,0.25);
+}
+#lives .pip.off { background: rgba(255,255,255,0.18); box-shadow: none; }
+
+#comboTag {
+  display: inline-block;
+  margin: 8px 4px;
+  padding: 4px 12px;
+  background: rgba(255,217,61,0.18);
+  border: 1px solid #ffd93d;
+  border-radius: 10px;
+  color: #ffd93d;
+  font-weight: bold;
+}
+#comboTag.hidden { display: none; }
+
+#bossBar { margin: 10px 4px; max-width: 520px; }
+#bossBar.hidden { display: none; }
+#bossName { color: #ff8c8c; font-weight: bold; font-size: 16px; margin-bottom: 4px; }
+.boss-track {
+  width: 100%;
+  height: 16px;
+  background: rgba(255,255,255,0.12);
+  border: 1px solid #5a2c2c;
+  border-radius: 8px;
+  overflow: hidden;
+}
+#bossFill {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, #ff5d73, #ff8c42);
+  transition: width 0.15s linear;
+}
+
+#toast {
+  position: absolute;
+  top: 38%;
+  left: 0; right: 0;
+  text-align: center;
+  font-size: 30px;
+  font-weight: bold;
+  color: #fff;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.6);
+}
+#toast.hidden { display: none; }
+
+/* 关卡选择 */
+.level-grid { display: flex; flex-wrap: wrap; justify-content: center; margin: 10px 0; }
+.level-btn {
+  width: 160px;
+  min-height: 96px;
+  margin: 8px;
+  border-radius: 14px;
+  background: #1c2230;
+  border: 2px solid #2c3650;
+  color: #e6ebf3;
+  text-align: center;
+  padding: 12px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.level-btn .lv-no { font-size: 22px; font-weight: bold; }
+.level-btn .lv-name { font-size: 15px; color: #9aa3b2; margin-top: 4px; }
+.level-btn .lv-tag { font-size: 13px; margin-top: 6px; color: #ffd93d; }
+.level-btn.boss { border-color: #b8455a; }
+.level-btn.locked { opacity: 0.45; }
+.level-btn.locked .lv-name:after { content: " · 未解锁"; color: #777; }
+.level-btn.sel, .level-btn:focus { outline: 4px solid #5a8dee; outline-offset: 2px; }
+
+/* 卡片与文字 */
+.card {
+  background: rgba(17, 21, 28, 0.92);
+  border: 2px solid #2c3650;
+  border-radius: 18px;
+  padding: 28px 36px;
+  max-width: 560px;
+  width: 90%;
+}
+.card.wide { max-width: 640px; }
+.title-tag { letter-spacing: 3px; font-size: 15px; color: #5a8dee; margin-bottom: 6px; }
+h1 { font-size: 44px; margin-bottom: 8px; }
+h2 { font-size: 30px; margin-bottom: 14px; }
+.subtitle { color: #9aa3b2; font-size: 17px; margin-bottom: 14px; }
+.hint { color: #9aa3b2; margin-top: 16px; font-size: 15px; }
+.best-line { color: #ffd93d; font-size: 19px; margin: 6px 0 16px; }
+.howto {
+  text-align: left;
+  background: rgba(28, 34, 48, 0.6);
+  border-radius: 12px;
+  padding: 12px 16px;
+}
+.howto p { color: #cdd4e0; font-size: 15px; line-height: 1.65; margin: 3px 0; }
+.howto b { color: #ffd93d; }
+
+.big-btn { font-size: 22px; padding: 14px 36px; background: #2b5bd7; border: 2px solid #5a8dee; color: #fff; }
+.text-btn { font-size: 17px; padding: 11px 22px; }
+.btn-row { display: flex; flex-wrap: wrap; justify-content: center; margin-top: 6px; }
+.btn-row > * { margin: 7px; }
+.score-box { display: flex; justify-content: center; margin: 8px 0 4px; }
+.score-item { display: flex; flex-direction: column; margin: 0 20px; }
+.score-label { color: #9aa3b2; font-size: 15px; }
+.score-num { font-size: 38px; color: #ffd93d; font-weight: bold; }
+.overlay h1, .overlay h2 { color: #f2f4f8; }
+
+/* 关键：overlay 的隐藏与全屏布局在此自包含兜底，避免依赖 ../shared/base.css
+ * 一旦 base.css 未加载/被拦截，所有 .overlay 会退化为普通块元素全部堆叠显示。
+ * 默认全部隐藏，仅去掉 .hidden 的界面才显示。 */
+.overlay {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: rgba(0, 0, 0, 0.92);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 5%;
+  z-index: 10;
+}
+.overlay.hidden { display: none; }
