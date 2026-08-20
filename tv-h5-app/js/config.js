@@ -61,6 +61,19 @@ window.APP_CONFIG = {
       tvControls: true
     },
 
+    {
+      id: "number-runner",
+      title: "数字跑酷",
+      subtitle: "三车道无尽跑酷 · 合并相同数字",
+      // 注意：icon 走 ASCII 符号，避免电视 WebView 上 emoji 渲染成 □（见 STANDARD §6）
+      icon: "123",
+      folder: "number-runner",
+      entry: "index.html",
+      completed: true,
+      color: "#ff8c42",
+      tvControls: true
+    },
+
     /* ↓↓↓ 后续新游戏照抄这一段，completed 先设 false 即可占位 ↓↓↓ */
     {
       id: "coming-soon",
