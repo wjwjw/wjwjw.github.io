@@ -50,18 +50,6 @@ window.APP_CONFIG = {
    */
   games: [
     {
-      id: "maze-challenge",
-      title: "迷宫闯关",
-      subtitle: "像素小冒险 · 方向键 / WASD 移动",
-      icon: "🦖",
-      folder: "maze-challenge",
-      entry: "index.html",
-      completed: true,
-      color: "#5a8dee",
-      tvControls: true
-    },
-
-    {
       id: "number-runner",
       title: "数字跑酷",
       subtitle: "三车道无尽跑酷 · 合并相同数字",
@@ -74,12 +62,25 @@ window.APP_CONFIG = {
       tvControls: true
     },
 
+    {
+      id: "maze-challenge",
+      title: "迷宫闯关",
+      subtitle: "像素小冒险 · 方向键 / WASD 移动",
+      // icon 支持图片路径（老 WebView 渲染不了彩色 emoji 字形，用自托管 PNG 最稳）或纯字符
+      icon: "assets/icons/dino.png",
+      folder: "maze-challenge",
+      entry: "index.html",
+      completed: true,
+      color: "#5a8dee",
+      tvControls: true
+    },
+
     /* ↓↓↓ 后续新游戏照抄这一段，completed 先设 false 即可占位 ↓↓↓ */
     {
       id: "coming-soon",
       title: "新游戏待定",
       subtitle: "开发中 · 敬请期待",
-      icon: "🎯",
+      icon: "assets/icons/target.png",
       folder: "",
       entry: "",
       completed: false,

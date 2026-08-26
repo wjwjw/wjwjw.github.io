@@ -73,7 +73,7 @@
       card.style.setProperty("--card-color", g.color || "#5a8dee");
       card.dataset.index = i;
       card.innerHTML =
-        '<div class="card-icon">' + (g.icon || "🎮") + "</div>" +
+        '<div class="card-icon">' + iconHtml(g.icon) + "</div>" +
         '<div class="card-title">' + escapeHtml(g.title) + "</div>" +
         '<div class="card-sub">' + escapeHtml(g.subtitle || "") + "</div>" +
         (g.completed
@@ -110,7 +110,7 @@
   function updatePreview() {
     var g = cfg.games[selected];
     if (!g) return;
-    preview.icon.textContent = g.icon || "🎮";
+    preview.icon.innerHTML = iconHtml(g.icon);
     preview.title.textContent = g.title;
     preview.desc.textContent = g.subtitle || "";
     preview.status.className = "preview-status " + (g.completed ? "ok" : "wip");
@@ -135,7 +135,7 @@
     var g = cfg.games[selected];
     if (!g) return;
     if (!g.completed) {
-      showToast("「" + g.title + "」即将推出，敬请期待 🚧");
+      showToast("「" + g.title + "」即将推出，敬请期待");
       return;
     }
     var url = resolveGameUrl(g);
@@ -249,6 +249,15 @@
     return String(s).replace(/[&<>"']/g, function (m) {
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m];
     });
+  }
+
+  // icon 支持两种形态：图片路径（.png/.jpg/.svg… → <img>，老 WebView 渲染不了彩色 emoji 字形，用图最稳）或纯字符
+  function iconHtml(icon) {
+    if (!icon) return "?";
+    if (/\.(png|jpe?g|gif|svg)$/i.test(icon)) {
+      return '<img src="' + escapeHtml(icon) + '" alt="">';
+    }
+    return escapeHtml(icon);
   }
 
   window.addEventListener("resize", function () { columns = getColumns(); });
