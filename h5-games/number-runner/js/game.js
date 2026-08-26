@@ -87,6 +87,7 @@
     groundTex.repeat.set(1, 9);
     var geo = new THREE.PlaneGeometry(LANE_SP * 3, 78);
     var mat = new THREE.MeshLambertMaterial({ map: groundTex });
+    groundMat = mat;
     var ground = new THREE.Mesh(geo, mat);
     ground.rotation.x = -Math.PI / 2;
     ground.position.set(0, 0, -22);
@@ -130,6 +131,25 @@
     document.body.appendChild(warpOverlay);
   }
 
+  // 全屏闪光：默认蓝色（传送），通关时切金色。仅改 background + opacity，不新增 DOM
+  var ORIG_WARP_BG = "radial-gradient(circle at 50% 62%,#7fe9ff 0%,rgba(122,92,255,0.6) 55%,rgba(11,14,20,0) 100%)";
+  function flashScreen() {
+    if (!warpOverlay) return;
+    warpOverlay.style.background = "radial-gradient(circle at 50% 55%, rgba(255,228,130,0.9) 0%, rgba(255,176,40,0.4) 55%, rgba(11,14,20,0) 100%)";
+    warpOverlay.style.opacity = "0.8";
+  }
+  function restoreWarpBg() {
+    if (!warpOverlay) return;
+    warpOverlay.style.background = ORIG_WARP_BG;
+    warpOverlay.style.opacity = "0";
+  }
+  // 死亡瞬间用的红色闪光（复用 warpOverlay 这一层），与金色闪光对称
+  function flashRed() {
+    if (!warpOverlay) return;
+    warpOverlay.style.background = "radial-gradient(circle at 50% 50%, rgba(255,70,70,0.85) 0%, rgba(150,20,20,0.5) 55%, rgba(11,14,20,0) 100%)";
+    warpOverlay.style.opacity = "0.7";
+  }
+
   // ---------- 工具：数值取色 ----------
   function valueColor(v) {
     var p = Math.round(Math.log(v) / Math.log(2));
@@ -154,12 +174,18 @@
     c.width = c.height = 256;
     var g = c.getContext("2d");
     var txt = String(value);
-    var fs = txt.length >= 4 ? 104 : (txt.length === 3 ? 128 : 150);
-    g.font = "bold " + fs + "px 'PingFang SC','Microsoft YaHei',system-ui,sans-serif";
+    // 长数字自适应：先按位数选基准字号，再用 measureText 实测宽度收缩到画布内，
+    // 避免 5 位以上（如 16384）横向溢出被裁切。
+    var fs = txt.length >= 5 ? 84 : (txt.length === 4 ? 104 : (txt.length === 3 ? 128 : 150));
+    var fontOf = function (s) { return "bold " + s + "px 'PingFang SC','Microsoft YaHei',system-ui,sans-serif"; };
+    g.font = fontOf(fs);
+    var maxW = 236;
+    var w = g.measureText(txt).width;
+    if (w > maxW) { fs = Math.max(42, Math.floor(fs * maxW / w)); g.font = fontOf(fs); }
     g.textAlign = "center"; g.textBaseline = "middle";
     g.lineJoin = "round";
     // 不要背板：彩色描边（保留数值大小的颜色身份）+ 白色填充，深色背景上清晰可见
-    g.lineWidth = 22;
+    g.lineWidth = Math.max(8, Math.round(fs * 0.15));
     g.strokeStyle = valueColor(value);
     g.strokeText(txt, 128, 138);
     g.fillStyle = "#fff";
@@ -255,17 +281,38 @@
   }
   function makeBanana(lane) {
     var grp = new THREE.Group();
-    var m = new THREE.MeshLambertMaterial({ color: 0xf4d23a });
-    var arc = new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.2, 8, 18, Math.PI * 1.25), m);
-    arc.position.y = ENT_Y;
-    arc.rotation.z = Math.PI * 0.15;
-    grp.add(arc);
+    // body 作为旋转体（弯月+果柄+尖），标签单独挂在 grp 上不跟着转
+    var body = new THREE.Group();
+    // 弯月形曲线（XY 平面）：两端上翘、中段下垂，比圆环弧更像真香蕉
+    var curve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(-0.8, 0.42, 0),
+      new THREE.Vector3(-0.42, -0.26, 0),
+      new THREE.Vector3(0.0, -0.5, 0),
+      new THREE.Vector3(0.42, -0.26, 0),
+      new THREE.Vector3(0.8, 0.42, 0)
+    ]);
+    var geo = new THREE.TubeGeometry(curve, 32, 0.21, 12, false);
+    var mat = new THREE.MeshLambertMaterial({ color: 0xf6d23a });
+    var tube = new THREE.Mesh(geo, mat);
+    body.add(tube);
+    // 棕色果柄（一头）
+    var stem = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.085, 0.32, 6),
+      new THREE.MeshLambertMaterial({ color: 0x6b4a1f }));
+    stem.position.set(-0.8, 0.6, 0); stem.rotation.z = 0.55;
+    body.add(stem);
+    // 另一头的深色熟蒂尖
+    var tip = new THREE.Mesh(new THREE.SphereGeometry(0.07, 7, 6),
+      new THREE.MeshLambertMaterial({ color: 0x4a3414 }));
+    tip.position.set(0.8, 0.42, 0);
+    body.add(tip);
+    body.position.y = ENT_Y;
+    grp.add(body);
     var tag = makeLabelSprite("蕉", "#e0b400", 1.05);
     tag.position.set(0, ENT_Y + 1.25, 0);
     grp.add(tag);
     grp.position.set(laneX[lane], 0, spawnZ);
     scene.add(grp);
-    return { type: "banana", lane: lane, z: spawnZ, x: laneX[lane], mesh: grp, model: arc, hit: false, dead: false, spin: 0 };
+    return { type: "banana", lane: lane, z: spawnZ, x: laneX[lane], mesh: grp, model: body, hit: false, dead: false, spin: 0 };
   }
   function makePortal(lane) {
     var grp = new THREE.Group();
@@ -334,19 +381,28 @@
     { name: "第 3 关 · 传送门法师", dist: 760, speed: 13, boss: "portal" },
     { name: "第 4 关 · 数字泰坦", dist: 880, speed: 15, boss: "titan" }
   ];
+  // Boss HP = 入场时玩家数值 × hpMul。
+  // 关键：玩家数字指数滚雪球（2→4→8…），绝对血量会被一次合并秒掉；
+  // 改为「当前数值的倍数」后，击杀所需合并次数恒定 ≈ log2(hpMul/2)，
+  // 与数字多大无关，最终 Boss 不再是 2 下通关。
+  // [PLACEHOLDER · 待 playtest] 目标单场 Boss 战：摆锤魔≈12s / 法师≈16s / 泰坦≈20s
   var BOSSCFG = {
-    pendulum: { name: "摆锤魔", hp: 360, color: 0xb8455a, attacks: ["pendulum", "bomb", "banana"] },
-    portal: { name: "传送门法师", hp: 520, color: 0x7a5cff, attacks: ["portal", "bomb", "banana"] },
-    titan: { name: "数字泰坦", hp: 760, color: 0xff8c42, attacks: ["bomb", "pendulum", "banana"] }
+    pendulum: { name: "摆锤魔", hpMul: 96, color: 0xb8455a, attacks: ["pendulum", "bomb", "banana"] },
+    portal: { name: "传送门法师", hpMul: 384, color: 0x7a5cff, attacks: ["portal", "bomb", "banana"] },
+    titan: { name: "数字泰坦", hpMul: 1500, color: 0xff8c42, attacks: ["bomb", "pendulum", "banana"] }
   };
+
+  // 死亡演出时长（秒）。[PLACEHOLDER · 待 playtest] 与 startDeathSeq 里 cinemaTimer 初值保持一致
+  var DEATH_DUR = 1.8;
+  var VICTORY_DUR = 3.0; // [PLACEHOLDER · 待 playtest] 通关演出时长；原 2.2s 偏快，加长到 3.0s 让切胜利不再突兀
 
   // ---------- 游戏状态 ----------
   var STATE = { MENU: "menu", SELECT: "select", PLAY: "playing", PAUSE: "paused", OVER: "gameover", VICTORY: "victory" };
   var state = STATE.MENU;
 
-  var entities, distance, score, best, lives, combo;
+  var entities, distance, score, best, lives, combo, actionScore, mergeBump, cinematic, cinemaTimer, cinemaKind, levelNav, selNav;
   var gameClock, spawnTimer, shieldEnd, invincibleEnd, shrinkEnd, slipEnd, warpTimer;
-  var speedMul, shake, bossPhase, boss, bossHP, bossMaxHP, bossAttackTimer;
+  var speedMul, shake, bossPhase, boss, bossHP, bossMaxHP, bossAttackTimer, groundMat, boostActive;
   var currentLevel, maxUnlocked;
   var BEST_KEY = "numberRunnerBest";
   var UNLOCK_KEY = "numberRunnerUnlocked";
@@ -374,16 +430,23 @@
     bossPhase = false;
     distance = 0;
     score = (typeof score === "number") ? score : 0;
-    lives = 5;
+    lives = 3; // 与 HUD 的 3 格血量、howto 文案「共 3 条」保持一致，消除隐形命
     combo = 0;
+    actionScore = (typeof actionScore === "number") ? actionScore : 0; // 跨关卡累计的操作分
+    mergeBump = -1;
+    cinematic = false; cinemaTimer = 0; cinemaKind = "";
     player.value = 2; player.lane = 1; player.x = laneX[1];
     player.mesh.position.set(player.x, 0, playerZ);
+    player.mesh.rotation.set(0, 0, 0);
     player.mesh.scale.set(1, 1, 1);
     player.mesh.visible = true;
     refreshPlayerVisual();
     gameClock = 0; spawnTimer = 1.1;
     shieldEnd = 0; invincibleEnd = 0; shrinkEnd = 0; slipEnd = 0; warpTimer = 0;
-    if (warpOverlay) warpOverlay.style.opacity = "0";
+    if (warpOverlay) { warpOverlay.style.opacity = "0"; warpOverlay.style.background = ORIG_WARP_BG; }
+    boostActive = false;
+    var bReset = document.getElementById("boostBar");
+    if (bReset) { bReset.classList.add("hidden"); bReset.classList.remove("warn"); }
     if (camera) { camera.fov = 60; camera.updateProjectionMatrix(); }
     speedMul = 1; shake = 0;
     hide("bossBar");
@@ -428,30 +491,91 @@
   }
 
   function spawnBossAttack(cfg) {
-    var lane = Math.floor(Math.random() * LANES);
+    // 保证一波里有一个可合并的数字（用于累积伤害打 Boss），与攻击分开放不同车道
+    var numLane = Math.floor(Math.random() * LANES);
+    entities.push(makeNum(numLane, player.value));
+    var atkLane = (numLane + 1 + Math.floor(Math.random() * (LANES - 1))) % LANES;
     var t = cfg.attacks[Math.floor(Math.random() * cfg.attacks.length)];
-    if (t === "pendulum") entities.push(makePendulum(lane));
-    else if (t === "portal") entities.push(makePortal(lane));
-    else if (t === "banana") entities.push(makeBanana(lane));
-    else entities.push(makeBomb(lane));
-    // Boss 战里多掉一点变小药水，便于躲摆锤
-    if (Math.random() < 0.28) entities.push(makeShrink((lane + 1) % LANES));
+    if (t === "pendulum") entities.push(makePendulum(atkLane));
+    else if (t === "portal") entities.push(makePortal(atkLane));
+    else if (t === "banana") entities.push(makeBanana(atkLane));
+    else entities.push(makeBomb(atkLane));
+    // 偶尔给一颗变小药水，便于躲摆锤
+    if (Math.random() < 0.3) entities.push(makeShrink((atkLane + 1) % LANES));
   }
 
   // ---------- 更新 ----------
   function update(dt) {
     gameClock += dt;
+    // 终局演出：世界继续向前滑行，但不刷怪、不判定、不计分；金色闪屏淡出后切胜利
+    if (cinematic) {
+      cinemaTimer -= dt;
+      if (cinemaKind === "victory") {
+        // 通关演出：世界继续向前滑行，金色闪屏淡出，结束切 victory()
+        var cSpd = levelSpeed();
+        distance += cSpd * dt;
+        if (groundTex) groundTex.offset.y -= cSpd * dt * 0.018;
+        var txV = laneX[player.lane];
+        player.x += (txV - player.x) * Math.min(1, dt * 14);
+        player.mesh.position.x = player.x;
+        if (warpOverlay && warpOverlay.style.opacity !== "0") {
+          var opV = parseFloat(warpOverlay.style.opacity) - dt * 0.45;
+          warpOverlay.style.opacity = (opV < 0 ? 0 : opV).toFixed(2);
+        }
+        updateHUD();
+        if (cinemaTimer <= 0) { cinematic = false; restoreWarpBg(); victory(); }
+        return;
+      }
+      // 死亡演出：世界惯性缓停 + 玩家倒下 + 红屏淡出，结束切 gameOver()
+      var dSpd = levelSpeed() * Math.max(0, cinemaTimer) / DEATH_DUR;
+      distance += dSpd * dt;
+      if (groundTex) groundTex.offset.y -= dSpd * dt * 0.018;
+      var txD = laneX[player.lane];
+      player.x += (txD - player.x) * Math.min(1, dt * 14);
+      player.mesh.position.x = player.x;
+      var dp = 1 - Math.max(0, cinemaTimer) / DEATH_DUR; // 0→1 演出进度
+      player.mesh.rotation.z = dp * 1.5;        // 翻倒
+      player.mesh.position.y = -dp * 1.4;       // 沉下去
+      var dsc = 1 - dp * 0.4; player.mesh.scale.set(dsc, dsc, dsc); // 缩小
+      if (warpOverlay && warpOverlay.style.opacity !== "0") {
+        var opD = parseFloat(warpOverlay.style.opacity) - dt * 0.5;
+        warpOverlay.style.opacity = (opD < 0 ? 0 : opD).toFixed(2);
+      }
+      // 死亡瞬间一震（cinematic 分支跳过了主循环里的 shake 应用，这里手动做）
+      shake = Math.max(0, shake - dt * 0.6);
+      camera.position.x = (Math.random() - 0.5) * shake * 2;
+      camera.position.y = 3.4 + (Math.random() - 0.5) * shake * 2;
+      updateHUD();
+      if (cinemaTimer <= 0) { cinematic = false; restoreWarpBg(); gameOver(); }
+      return;
+    }
     var warping = warpTimer > 0;
     if (warping) warpTimer -= dt;
     var spd = levelSpeed() * (gameClock < slipEnd ? 0.45 : 1) * (warping ? 3.2 : 1);
-    // 传送动画：镜头拉宽 + 全屏闪光，营造冲刺/瞬移感
+    // 传送动画：镜头拉宽 + 全屏闪光 + 跑道发光 + HUD 加速条，让「加速何时结束」清晰可见
     if (warping) {
       camera.fov = 74; camera.updateProjectionMatrix();
       var wp = 1 - warpTimer / 0.85;
       if (warpOverlay) warpOverlay.style.opacity = (Math.sin(wp * Math.PI) * 0.6).toFixed(2);
-    } else if (warpOverlay) {
+      if (groundMat) groundMat.emissive.setHex(0x2a3a8a); // 跑道被「传送能量」点亮
+      var bp = Math.max(0, warpTimer / 0.85); // 剩余比例 1→0
+      var bEl = document.getElementById("boostBar");
+      if (bEl) {
+        bEl.classList.remove("hidden");
+        document.getElementById("boostFill").style.width = (bp * 100).toFixed(1) + "%";
+        if (warpTimer < 0.25) bEl.classList.add("warn"); else bEl.classList.remove("warn");
+      }
+      boostActive = true;
+    } else {
       if (camera.fov !== 60) { camera.fov = 60; camera.updateProjectionMatrix(); }
-      if (warpOverlay.style.opacity !== "0") warpOverlay.style.opacity = "0";
+      if (warpOverlay && warpOverlay.style.opacity !== "0") warpOverlay.style.opacity = "0";
+      if (groundMat) groundMat.emissive.setHex(0x000000);
+      if (boostActive) { // 加速刚结束：收起 HUD 条并提示，明确「已回到常速」
+        boostActive = false;
+        var bEl2 = document.getElementById("boostBar");
+        if (bEl2) bEl2.classList.add("hidden");
+        toast("加速结束", 700);
+      }
     }
     distance += spd * dt;
 
@@ -463,18 +587,28 @@
     player.x += (tx - player.x) * Math.min(1, dt * 14);
     player.mesh.position.x = player.x;
     var shrunk = gameClock < shrinkEnd;
-    var sc = shrunk ? 0.5 : 1;
+    var bump = 1;
+    if (gameClock - mergeBump < 0.18) bump = 1 + 0.25 * (1 - (gameClock - mergeBump) / 0.18);
+    var sc = (shrunk ? 0.5 : 1) * bump;
     player.mesh.scale.set(sc, sc, sc);
     var shield = gameClock < shieldEnd, inv = gameClock < invincibleEnd;
     player.ring.visible = shield || inv;
     if (shield) { player.ringMat.color.set(0x36c6d3); player.ringMat.opacity = 0.7 + 0.2 * Math.sin(gameClock * 8); }
     else if (inv) { player.ringMat.color.set(0xffd93d); player.ringMat.opacity = 0.7 + 0.2 * Math.sin(gameClock * 10); }
 
-    // 生成
-    spawnTimer -= dt;
-    if (spawnTimer <= 0) {
-      spawnRow();
-      spawnTimer = Math.max(1.0 - distance * 0.00015, 0.55);
+    // 生成：Boss 战只由攻击波驱动，避免与常规波次叠加导致拥挤
+    if (bossPhase) {
+      bossAttackTimer -= dt;
+      if (bossAttackTimer <= 0) {
+        spawnBossAttack(BOSSCFG[LEVELS[currentLevel].boss]);
+        bossAttackTimer = 2.3;
+      }
+    } else {
+      spawnTimer -= dt;
+      if (spawnTimer <= 0) {
+        spawnRow();
+        spawnTimer = Math.max(1.0 - distance * 0.00015, 0.55);
+      }
     }
 
     // 移动 / 碰撞
@@ -492,6 +626,7 @@
       if (e.model) {
         if (e.type === "portal") e.model.rotation.z += dt * 3;
         else if (e.type === "shrink") e.model.rotation.y += dt * 2;
+        else if (e.type === "banana") e.model.rotation.z = Math.sin(e.spin * 2.5) * 0.3; // 平面内轻轻摇晃，像浮着的香蕉
         else e.model.rotation.y += dt * 1.2;
       }
 
@@ -516,14 +651,11 @@
     }
     entities = kept;
 
-    // 距离分
-    var distScore = Math.floor(distance / 6);
-    score = Math.max(score, distScore);
+    // 真实分数 = 距离基线 + 操作分（合并加分 / 惩罚扣分 / 奖励）；操作分永久生效，不再被距离覆盖
+    score = Math.max(0, Math.floor(distance / 6) + actionScore);
 
-    // Boss 阶段
+    // Boss 阶段 / 过关判定
     if (bossPhase) {
-      bossAttackTimer -= dt;
-      if (bossAttackTimer <= 0) { spawnBossAttack(BOSSCFG[LEVELS[currentLevel].boss]); bossAttackTimer = 2.3; }
       animateBoss(dt);
     } else if (distance >= LEVELS[currentLevel].dist && LEVELS[currentLevel].boss) {
       enterBossPhase();
@@ -542,13 +674,13 @@
       invincibleEnd = gameClock + 1.9;
       // 触发“传送”动画：冲刺加速 + 镜头拉伸 + 全屏闪光，世界快速掠过而非瞬移坐标
       if (warpTimer <= 0) warpTimer = 0.85;
-      score += 120;
+      actionScore += 120;
       toast("传送! +120", 900);
       return;
     }
-    if (e.type === "banana") {
+      if (e.type === "banana") {
       slipEnd = gameClock + 1.4;
-      score = Math.max(0, score - 40);
+      actionScore = Math.max(actionScore - 40, -Math.floor(distance / 6));
       audio.sfx("banana");
       toast("滑倒! -40", 900);
       return;
@@ -556,10 +688,10 @@
     var safe = gameClock < shieldEnd || gameClock < invincibleEnd;
     if (e.type === "num") {
       if (e.value === player.value) { doMerge(); }
-      else if (!safe) { combo = 0; audio.sfx("wrong"); toast("数字不符 -15", 700); score = Math.max(0, score - 15); }
+      else if (!safe) { combo = 0; audio.sfx("wrong"); toast("数字不符 -15", 700); actionScore = Math.max(actionScore - 15, -Math.floor(distance / 6)); }
     } else if (e.type === "bomb") {
       if (safe) return;
-      combo = 0; audio.sfx("hit"); toast("炸弹!", 700); loseLife();
+      combo = 0; audio.sfx("hit"); toast("炸弹!", 700); shake = 0.35; loseLife();
     } else if (e.type === "pendulum") {
       if (safe) return;
       combo = 0; audio.sfx("pendulum"); toast("被摆锤击中!", 800); shake = 0.4; loseLife();
@@ -568,18 +700,21 @@
 
   function doMerge() {
     var gained = player.value + combo * 2;
-    score += gained;
+    actionScore += gained;
     combo++;
     player.value *= 2;
     refreshPlayerVisual();
     audio.sfx("merge");
+    mergeBump = gameClock;
     if (combo >= 2) {
       var ct = document.getElementById("comboTag");
       ct.textContent = "连击 x" + combo + "!";
       ct.classList.remove("hidden");
     }
     if (bossPhase && boss) {
-      bossHP -= player.value;
+      // 连击放大对 Boss 的伤害：每多 1 连击 +50%，奖励无伤连击
+      var dmg = player.value * (1 + (combo - 1) * 0.5);
+      bossHP -= dmg;
       updateBossBar();
       pulseBoss();
       if (bossHP <= 0) bossDefeated();
@@ -589,7 +724,16 @@
   function loseLife() {
     lives--;
     updateLives();
-    if (lives <= 0) gameOver();
+    if (lives <= 0) startDeathSeq();
+  }
+  // 死亡演出入口：不再硬切 gameoverScreen，而是先放一段「倒下」演出
+  function startDeathSeq() {
+    cinematic = true; cinemaKind = "death"; cinemaTimer = DEATH_DUR; // [PLACEHOLDER · 待 playtest] 时长见 DEATH_DUR
+    clearEntities();
+    shake = 0.5;
+    audio.stopBGM(); audio.sfx("over");
+    flashRed();
+    toast("游戏结束", 1400);
   }
 
   // ---------- Boss ----------
@@ -597,7 +741,7 @@
     bossPhase = true;
     var key = LEVELS[currentLevel].boss;
     var cfg = BOSSCFG[key];
-    bossMaxHP = cfg.hp; bossHP = cfg.hp;
+    bossMaxHP = Math.max(1, Math.round(player.value * cfg.hpMul)); bossHP = bossMaxHP;
     document.getElementById("bossName").textContent = cfg.name;
     updateBossBar();
     show("bossBar");
@@ -655,12 +799,21 @@
   }
   function bossDefeated() {
     audio.sfx("levelup");
+    var isFinal = currentLevel >= LEVELS.length - 1;
     var name = BOSSCFG[LEVELS[currentLevel].boss].name;
     hide("bossBar");
     if (boss) { scene.remove(boss.mesh); boss = null; }
     bossPhase = false;
-    score += 250;
-    if (currentLevel >= LEVELS.length - 1) { victory(); return; }
+    if (isFinal) {
+      // 终局：清场 + 金色闪屏 + 2.2s 演出，再切胜利界面，避免硬切
+      clearEntities();
+      cinematic = true; cinemaTimer = VICTORY_DUR; // 通关演出：延长到 3.0s，避免切胜利太突兀
+      audio.sfx("victory");
+      flashScreen();
+      toast("击败 " + name + "！通关！", 2200);
+      return;
+    }
+    actionScore += 250;
     maxUnlocked = Math.max(maxUnlocked, currentLevel + 1); saveUnlocked();
     toast("击败 " + name + "! 进入下一关", 1500);
     currentLevel++;
@@ -775,7 +928,15 @@
       })(i);
     }
     show("levelScreen");
-    if (window.TVNav && !window.__tvControlsInjected) TVNav.focusFirst();
+    // 选关改为「按序号线性导航」：左/上=上一关，右/下=下一关，末尾落到「返回」，
+    // 不再依赖空间就近导航（2×2 布局下按右会卡在右边缘）。DOM 焦点由本模块自管。
+    levelNav = Array.prototype.slice.call(grid.querySelectorAll(".level-btn"));
+    levelNav.push(document.getElementById("btnLevelBack"));
+    selNav = Math.min((typeof currentLevel === "number" ? currentLevel : 0), levelNav.length - 1);
+    // 用显式 .sel 类做高亮：这些按钮是「无 tabindex 的 div」，WebView 上 .focus() 是空操作，:focus 不触发，
+    // 必须手动切类。确认键仍走 levelNav[selNav].click()，与高亮位置一致。
+    levelNav.forEach(function (b, i) { b.classList.toggle("sel", i === selNav); });
+    if (levelNav[selNav]) { try { levelNav[selNav].focus(); } catch (e) {} }
   }
 
   function pauseGame() {
@@ -795,7 +956,7 @@
 
   function gameOver() {
     state = STATE.OVER;
-    audio.stopBGM(); audio.sfx("over");
+    // 音效与 BGM 停止已在 startDeathSeq（死亡瞬间）触发，这里不再重复，避免双响
     if (score > best) { best = score; saveBest(); }
     document.getElementById("finalScore").textContent = score;
     document.getElementById("bestScore").textContent = best;
@@ -814,6 +975,8 @@
     audio.stopBGM(); audio.sfx("victory");
     if (score > best) { best = score; saveBest(); }
     maxUnlocked = LEVELS.length - 1; saveUnlocked();
+    var finalName = BOSSCFG[LEVELS[LEVELS.length - 1].boss].name;
+    document.getElementById("victoryTip").textContent = "你击败了 " + finalName + "，恭喜通关！";
     document.getElementById("victoryScore").textContent = score;
     hide("hud"); hide("comboTag");
     show("victoryScreen");
@@ -827,14 +990,31 @@
     else if (dir === "right") player.lane = Math.min(LANES - 1, player.lane + 1);
   }
 
+  var lastDirNavT = 0;
+  function navLevel(d) {
+    if (!levelNav.length) return;
+    var now = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+    if (now - lastDirNavT < 130) return; // 防 WebView 方向键 auto-repeat 连跳多格
+    lastDirNavT = now;
+    var step = (d === "left" || d === "up") ? -1 : 1;
+    var n = selNav + step;
+    if (n < 0) n = 0;
+    if (n > levelNav.length - 1) n = levelNav.length - 1;
+    if (n === selNav) return;
+    if (levelNav[selNav]) levelNav[selNav].classList.remove("sel");
+    selNav = n;
+    if (levelNav[selNav]) { levelNav[selNav].classList.add("sel"); try { levelNav[selNav].focus(); } catch (e) {} }
+  }
   var TVInput = window.TVInput;
   if (TVInput) {
     TVInput.on("dir", function (d) {
       if (state === STATE.PLAY) moveLane(d);
+      else if (state === STATE.SELECT) navLevel(d); // 选关：按序号线性导航
       else if (window.TVNav && !window.__tvControlsInjected) TVNav.move(d);
     });
     TVInput.on("confirm", function () {
       if (state === STATE.PLAY) return; // 游戏中 OK 不触发顶栏按钮
+      if (state === STATE.SELECT) { if (levelNav[selNav]) levelNav[selNav].click(); return; }
       if (window.TVNav && !window.__tvControlsInjected) TVNav.confirm();
     });
     TVInput.on("back", function () { onBack(); });
@@ -858,13 +1038,13 @@
   bindClick("btnStart", openLevelSelect);
   bindClick("btnLevelBack", gotoMenu);
   bindClick("btnResume", resumeGame);
-  bindClick("btnRestartPause", function () { score = 0; startLevel(currentLevel); });
+  bindClick("btnRestartPause", function () { score = 0; actionScore = 0; startLevel(currentLevel); });
   bindClick("btnMenuPause", openLevelSelect);
   bindClick("btnMutePause", function () {
     var m = audio.toggleMute();
     document.getElementById("btnMutePause").textContent = m ? "取消静音" : "声音";
   });
-  bindClick("btnReplay", function () { score = 0; startLevel(currentLevel); });
+  bindClick("btnReplay", function () { score = 0; actionScore = 0; startLevel(currentLevel); });
   bindClick("btnMenu", openLevelSelect);
   bindClick("btnVictoryMenu", openLevelSelect);
 

@@ -75,12 +75,22 @@
 }
 #toast.hidden { display: none; }
 
+/* 传送门加速指示：HUD 进度条 + 末段红色脉冲，让「加速何时结束」清晰 */
+#boostBar { display: flex; align-items: center; margin: 8px 4px; gap: 8px; }
+#boostBar.hidden { display: none; }
+.boost-label { background: rgba(122, 92, 255, 0.25); border: 1px solid #7a5cff; color: #cdbcff; border-radius: 8px; padding: 4px 10px; font-weight: bold; font-size: 15px; }
+.boost-track { width: 170px; height: 12px; background: rgba(255, 255, 255, 0.12); border: 1px solid #5a2c2c; border-radius: 6px; overflow: hidden; }
+#boostFill { height: 100%; width: 100%; background: linear-gradient(90deg, #7fe9ff, #7a5cff); }
+#boostBar.warn .boost-label { background: rgba(255, 70, 70, 0.3); border-color: #ff5d5d; color: #ffd0d0; animation: pulseWarn 0.22s infinite alternate; }
+#boostBar.warn #boostFill { background: linear-gradient(90deg, #ff5d5d, #ff8c42); }
+@keyframes pulseWarn { from { opacity: 0.55; } to { opacity: 1; } }
+
 /* 关卡选择 */
-.level-grid { display: flex; flex-wrap: wrap; justify-content: center; margin: 10px 0; }
+.level-grid { display: flex; flex-wrap: nowrap; justify-content: center; margin: 10px 0; overflow: visible; }
 .level-btn {
-  width: 160px;
+  width: 142px;
   min-height: 96px;
-  margin: 8px;
+  margin: 6px;
   border-radius: 14px;
   background: #1c2230;
   border: 2px solid #2c3650;
@@ -91,6 +101,8 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  position: relative;
+  transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease, background .12s ease;
 }
 .level-btn .lv-no { font-size: 22px; font-weight: bold; }
 .level-btn .lv-name { font-size: 15px; color: #9aa3b2; margin-top: 4px; }
@@ -98,7 +110,24 @@
 .level-btn.boss { border-color: #b8455a; }
 .level-btn.locked { opacity: 0.45; }
 .level-btn.locked .lv-name:after { content: " · 未解锁"; color: #777; }
-.level-btn.sel, .level-btn:focus { outline: 4px solid #5a8dee; outline-offset: 2px; }
+.level-btn, .text-btn { position: relative; transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease, background .12s ease; }
+.level-btn.sel, .level-btn:focus, .text-btn.sel, .text-btn:focus {
+  outline: none;
+  border-color: #5a8dee;
+  background: #25324d;
+  box-shadow: 0 0 0 3px rgba(90,141,238,0.55), 0 0 22px 6px rgba(90,141,238,0.65);
+  transform: scale(1.14);
+  z-index: 3;
+}
+.level-btn.sel .lv-no, .level-btn:focus .lv-no { color: #fff; }
+.level-btn.sel:before, .level-btn:focus:before, .text-btn.sel:before, .text-btn:focus:before {
+  content: "\25B6";
+  color: #5a8dee;
+  position: absolute;
+  left: 6px; top: 50%;
+  transform: translateY(-50%);
+  font-size: 14px;
+}
 
 /* 卡片与文字 */
 .card {
@@ -126,7 +155,7 @@ h2 { font-size: 30px; margin-bottom: 14px; }
 .howto b { color: #ffd93d; }
 
 .big-btn { font-size: 22px; padding: 14px 36px; background: #2b5bd7; border: 2px solid #5a8dee; color: #fff; }
-.text-btn { font-size: 17px; padding: 11px 22px; }
+.text-btn { font-size: 17px; padding: 11px 22px; border: 2px solid transparent; background: transparent; color: #cdd5e3; border-radius: 10px; }
 .btn-row { display: flex; flex-wrap: wrap; justify-content: center; margin-top: 6px; }
 .btn-row > * { margin: 7px; }
 .score-box { display: flex; justify-content: center; margin: 8px 0 4px; }
@@ -154,3 +183,6 @@ h2 { font-size: 30px; margin-bottom: 14px; }
   z-index: 10;
 }
 .overlay.hidden { display: none; }
+/* 界面出现时轻微淡入，避免胜利/结束等界面硬切 */
+@keyframes ovFadeIn { from { opacity: 0; } to { opacity: 1; } }
+.overlay:not(.hidden) { animation: ovFadeIn 0.4s ease both; }

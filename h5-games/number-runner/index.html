@@ -27,6 +27,10 @@
         <div class="boss-track"><div id="bossFill"></div></div>
       </div>
       <div id="toast" class="hidden"></div>
+      <div id="boostBar" class="hidden">
+        <span class="boost-label">加速</span>
+        <div class="boost-track"><div id="boostFill"></div></div>
+      </div>
     </div>
   </div>
 
@@ -113,7 +117,11 @@
 <!-- 经典脚本（兼容 Android 6 WebView，不用 ES module） -->
 <script src="../assets/vendor/three.min.js"></script>
 <script src="../shared/input.js"></script>
-<script src="../shared/nav.js"></script>
+    <!-- TV 启动器兜底：MainActivity.onKeyDown 会 evaluateJavascript("TVLauncher.handleBack()")
+         把遥控 BACK 键转发到 TVInput 的 back 事件（走 game.js 的 onBack 状态机）。
+         number-runner 没有 TVLauncher 全局对象，必须补这个兜底，否则 BACK 永远到不了 JS。 -->
+    <script>window.TVLauncher=window.TVLauncher||{handleBack:function(){try{window.TVInput&&window.TVInput.trigger('back')}catch(e){}}};</script>
+    <script src="../shared/nav.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/game.js"></script>
 </body>
