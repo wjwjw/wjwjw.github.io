@@ -21,6 +21,12 @@
     w: 'up', s: 'down', a: 'left', d: 'right',
     W: 'up', S: 'down', A: 'left', D: 'right'
   };
+  // 安卓电视 / 老 WebView(Chrome47) 的 D-pad 方向键常只给 keyCode、e.key 为空或 "Unidentified"，
+  // 必须按 keyCode 兜底匹配：19/20/21/22 是安卓 DPAD，37-40 是部分 WebView 转译出来的箭头键。
+  var DIR_CODES = {
+    38: 'up', 40: 'down', 37: 'left', 39: 'right',
+    19: 'up', 20: 'down', 21: 'left', 22: 'right'
+  };
   var handlers = { dir: [], confirm: [], back: [] };
 
   function emit(type, payload) {
@@ -35,11 +41,12 @@
   }
   function isBack(e) {
     return e.key === 'Escape' || e.key === 'BrowserBack' || e.key === 'GoBack' ||
-           e.key === 'Back' || e.keyCode === 461 || e.keyCode === 27;
+           e.key === 'Back' || e.keyCode === 461 || e.keyCode === 27 ||
+           e.keyCode === 4; // 安卓电视遥控器返回键（KEYCODE_BACK），真遥控 e.key 未必是 "Back"
   }
 
   global.addEventListener('keydown', function (e) {
-    var dir = DIR_KEYS[e.key];
+    var dir = DIR_KEYS[e.key] || DIR_CODES[e.keyCode];
     if (dir) { e.preventDefault(); emit('dir', dir); return; }
     if (isConfirm(e)) { e.preventDefault(); emit('confirm'); return; }
     if (isBack(e)) { e.preventDefault(); emit('back'); return; }
