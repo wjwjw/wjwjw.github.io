@@ -28,7 +28,7 @@
     .progress-wrap { margin-top: 10px; height: 8px; background: #222; border-radius: 4px; overflow: hidden; display: none; }
     .progress-wrap.show { display: block; }
     #progressBar { height: 100%; width: 0; background: linear-gradient(90deg, #2196f3, #64b5f6); transition: width .3s; }
-    #errorBox { display: none; margin-top: 16px; padding: 12px 14px; background: #3d1414; color: #ff8a8a; border: 1px solid #5c1f1f; border-radius: 8px; font-size: 13px; word-break: break-all; }
+    #errorBox { display: none; margin-top: 16px; padding: 12px 14px; background: #3d1414; color: #ff8a8a; border: 1px solid #5c1f1f; border-radius: 8px; font-size: 13px; word-break: break-all; white-space: pre-line; }
     .card { background: #181818; border-radius: 10px; margin-top: 24px; overflow: hidden; display: none; }
     .card.show { display: block; }
     .card-head { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-bottom: 1px solid #2a2a2a; font-weight: 600; }
@@ -52,18 +52,61 @@
     .tag.js { background: #3a0f24; color: #f06292; }
     .tag.img { background: #12321c; color: #66bb6a; }
     .tag.other { background: #262626; color: #9e9e9e; }
+    details.cfg { margin-top: 14px; background: #181818; border: 1px solid #2a2a2a; border-radius: 8px; padding: 0 14px; }
+    details.cfg[open] { padding-bottom: 14px; }
+    details.cfg summary { cursor: pointer; padding: 11px 0; font-size: 13px; color: #bbb; outline: none; }
+    details.cfg summary:hover { color: #fff; }
+    .cfg-row { display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+    .cfg-row label { font-size: 12px; color: #999; min-width: 96px; }
+    .cfg-row input[type=text] {
+      flex: 1; min-width: 220px; padding: 8px 10px; font-size: 13px; font-family: monospace;
+      background: #111; color: #eee; border: 1px solid #333; border-radius: 6px; outline: none;
+    }
+    .cfg-row input[type=text]:focus { border-color: #2196f3; }
+    .cfg-hint { font-size: 11px; color: #6b7280; margin-top: 6px; line-height: 1.6; }
+    .cfg-hint code { background: #222; padding: 1px 5px; border-radius: 3px; color: #ffd54f; }
+    .btn-sm { padding: 8px 14px; font-size: 12px; font-weight: 500; background: #2b2b2b; color: #ddd; border: 1px solid #3a3a3a; }
+    .btn-sm:hover:not(:disabled) { background: #383838; }
+    #channelReport { margin-top: 12px; font-size: 12px; line-height: 1.9; color: #999; }
+    #channelReport .ch { display: flex; justify-content: space-between; gap: 10px; border-top: 1px solid #242424; padding: 4px 0; }
+    #channelReport .ch span.n { word-break: break-all; }
+    #channelReport .ok { color: #4caf50; }
+    #channelReport .bad { color: #ef5350; }
+    .via { color: #6b7280; font-size: 12px; margin-left: 8px; }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>网页 URL 测速工具</h1>
-    <p class="sub">输入网址，自动提取页面上的所有 http/https 地址（自动去重），每个地址测速 5 次取平均值，按速度从快到慢排序，点击可跳转。</p>
+    <p class="sub">两种模式：<br>
+      ① <b>自动提取</b>：输入网址，抓取页面提取所有链接（依赖公共代理，见下方"公共代理诊断"）<br>
+      ② <b>手动列表</b>：直接粘贴 URL 列表（每行一个），不需要任何抓取通道，测真实连接延迟
+    </p>
 
     <div class="input-row">
-      <input id="urlInput" type="text" placeholder="https://example.com" spellcheck="false" />
+      <input id="urlInput" type="text" placeholder="模式①：https://example.com" spellcheck="false" />
       <button id="startBtn">开始测速</button>
       <button id="stopBtn" style="display:none" class="danger">停止</button>
     </div>
+    <textarea id="urlList" placeholder="模式②：手动粘贴 URL 列表（每行一个），留空则用模式①" style="width:100%;height:100px;margin-top:10px;font-family:monospace;font-size:13px;background:#181818;color:#eee;border:1px solid #333;border-radius:8px;padding:10px;display:none;"></textarea>
+    <label style="display:block;margin-top:8px;font-size:13px;color:#999;">
+      <input type="checkbox" id="manualMode" onchange="document.getElementById('urlList').style.display=this.checked?'block':'none';document.getElementById('urlInput').placeholder=this.checked?'模式②：留空即可':'模式①：https://example.com'" /> 使用手动 URL 列表模式（无需抓取通道）
+    </label>
+    <label style="display:block;margin-top:6px;font-size:13px;color:#999;">
+      <input type="checkbox" id="includeSameSite" /> 自动提取时保留同源地址（默认只测外部地址）
+    </label>
+
+    <details class="cfg" id="cfgPanel">
+      <summary>公共代理诊断（自动提取失败时点开这里）</summary>
+      <div class="cfg-row">
+        <button type="button" class="btn-sm" id="probeBtn">检测代理可用性</button>
+      </div>
+      <div class="cfg-hint">
+        自动提取依赖第三方公共 CORS 代理，它们时好时坏是常态（DNS 失效、要授权、限流都会导致失败）。
+        点上面的按钮可以逐个探测当前哪些还能用；全灭时请用「手动 URL 列表」模式，不依赖任何代理。
+      </div>
+      <div id="channelReport"></div>
+    </details>
     <div id="errorBox"></div>
     <div id="status"></div>
     <div class="progress-wrap" id="progressWrap">
@@ -101,10 +144,24 @@
       const SAMPLE_TIMEOUT = 15000;
       const URL_TIMEOUT = 120000;
       const CONCURRENCY = 4;
-      const PROXIES = [
-        (u) => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
-        (u) => 'https://corsproxy.io/?url=' + encodeURIComponent(u)
+      // ---------- 抓取通道（公共 CORS 代理，不稳定是常态） ----------
+      // 2026-09 实测：这些代理大多数时候不可用，只是多给几个机会；
+      // 用页面上的「检测代理可用性」看你网络下哪些还活着
+      const PUBLIC_PROXIES = [
+        { name: 'allorigins', build: (u) => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u) },
+        { name: 'codetabs', build: (u) => 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(u) },
+        { name: 'cors.lol', build: (u) => 'https://api.cors.lol/?url=' + encodeURIComponent(u) },
+        { name: 'corsproxy.io', build: (u) => 'https://corsproxy.io/?url=' + encodeURIComponent(u) },
+        { name: 'yacdn', build: (u) => 'https://yacdn.org/proxy/' + u },
+        { name: 'isomorphic-git', build: (u) => 'https://cors.isomorphic-git.org/' + u },
+        { name: 'cors.workers.dev', build: (u) => 'https://test.cors.workers.dev/?' + u },
+        { name: 'whateverorigin', build: (u) => 'https://www.whateverorigin.org/get?url=' + encodeURIComponent(u) }
       ];
+      const CHANNEL_TIMEOUT = 12000;
+
+      function buildChannels(url) {
+        return PUBLIC_PROXIES.map((p) => ({ name: p.name, url: p.build(url) }));
+      }
 
       function setStatus(t) { statusEl.textContent = t; }
       function setError(t) {
@@ -112,15 +169,69 @@
         else errorBox.style.display = 'none';
       }
 
-      async function fetchText(url) {
-        for (const proxy of PROXIES) {
+      // 所有通道同时出发，谁先拿到有效内容用谁，其余立即取消
+      function raceChannels(channels) {
+        const reasons = [];
+        return new Promise((resolve, reject) => {
+          let settled = false, finished = 0;
+          channels.forEach((ch) => {
+            const ctl = new AbortController();
+            const timer = setTimeout(() => ctl.abort(), CHANNEL_TIMEOUT);
+            const t0 = performance.now();
+            (async () => {
+              try {
+                const resp = await fetch(ch.url, { redirect: 'follow', signal: ctl.signal });
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                const text = await resp.text();
+                if (text.length < 50) throw new Error('内容过短(' + text.length + 'B)');
+                if (!settled) {
+                  settled = true;
+                  resolve({ text, via: ch.name, ms: Math.round(performance.now() - t0) });
+                }
+              } catch (e) {
+                if (!settled) reasons.push(ch.name + ' → ' + (e.name === 'AbortError' ? '超时/取消' : e.message));
+              } finally {
+                clearTimeout(timer);
+                if (!settled) { try { ctl.abort(); } catch (e) { } }
+                if (++finished === channels.length && !settled) {
+                  reject(new Error(reasons.join('\n') || '没有可用通道'));
+                }
+              }
+            })();
+          });
+        });
+      }
+
+      function fetchText(url) {
+        return raceChannels(buildChannels(url));
+      }
+
+      // ---------- 通道连通性自检 ----------
+      async function probeChannels() {
+        const report = document.getElementById('channelReport');
+        const probeTarget = 'https://example.com/';
+        const items = PUBLIC_PROXIES.map((p) => ({ name: p.name, url: p.build(probeTarget) }));
+
+        report.innerHTML = '检测中…（目标 example.com）';
+        const rows = await Promise.all(items.map(async (it) => {
+          const ctl = new AbortController();
+          const timer = setTimeout(() => ctl.abort(), 8000);
+          const t0 = performance.now();
+          let ok = false, msg = '';
           try {
-            const resp = await fetch(proxy(url), { redirect: 'follow' });
-            if (!resp.ok) continue;
-            return await resp.text();
-          } catch (e) { /* 尝试下一个代理 */ }
-        }
-        throw new Error('所有代理抓取失败，请稍后再试或更换网址');
+            const r = await fetch(it.url, { redirect: 'follow', signal: ctl.signal });
+            const txt = await r.text();
+            ok = r.ok && txt.length > 50;
+            msg = ok ? '可用' : ('HTTP ' + r.status + (txt.length ? ' / 内容 ' + txt.length + 'B' : ''));
+          } catch (e) {
+            msg = e.name === 'AbortError' ? '超时' : (e.message || '失败');
+          } finally { clearTimeout(timer); }
+          return { name: it.name, ok, msg, ms: Math.round(performance.now() - t0) };
+        }));
+        report.innerHTML = rows.map((r) =>
+          '<div class="ch"><span class="n">' + (r.ok ? '✅' : '❌') + ' ' + r.name + '</span>' +
+          '<span class="' + (r.ok ? 'ok' : 'bad') + '">' + r.msg + (r.ok ? ' · ' + r.ms + 'ms' : '') + '</span></div>'
+        ).join('') + '<div class="cfg-hint">公共代理时好时坏是常态；全灭时请直接用「手动 URL 列表」模式，不依赖任何代理。</div>';
       }
 
       function collectScriptLinks(html, pageUrl, timeout) {
@@ -216,18 +327,26 @@
           } catch (e) { }
         };
         const tagRe = /<(a|img|script|link|iframe|video|audio|source|embed)\b[^>]*>/gi;
-        const attrRe = /(?:href|src)\s*=\s*("([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/gi;
+        const attrRe = /(href|src|srcset|data-src|data-href|data-original|data-url)\s*=\s*("([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/gi;
         let m;
         while ((m = tagRe.exec(html))) {
           const tag = m[1].toLowerCase();
           let a;
           attrRe.lastIndex = 0;
           while ((a = attrRe.exec(m[0]))) {
-            const v = a[2] || a[3] || a[4];
+            const attr = (a[1] || '').toLowerCase();
+            const v = a[3] || a[4] || a[5];
             if (!v || v.startsWith('#') || v.startsWith('data:')) continue;
             if (tag === 'link' && !/stylesheet|icon|manifest|preload|preconnect|dns-prefetch/i.test(m[0])) continue;
-            add(v);
+            if (attr === 'srcset') {
+              v.split(',').forEach((part) => { const one = part.trim().split(/\s+/)[0]; if (one) add(one); });
+            } else add(v);
           }
+        }
+        const refreshRe = /<meta[^>]+http-equiv\s*=\s*["']?refresh["']?[^>]*content\s*=\s*["']([^"']+)["']/gi;
+        while ((m = refreshRe.exec(html))) {
+          const mm = /url\s*=\s*(.+)$/i.exec(m[1]);
+          if (mm) add(mm[1].trim().replace(/["']/g, ''));
         }
         const cssRe = /url\(\s*(['"]?)([^'")]+)\1\s*\)/gi;
         while ((m = cssRe.exec(html))) {
@@ -314,13 +433,39 @@
       stopBtn.addEventListener('click', () => { stopBtn.disabled = true; stop(); });
       input.addEventListener('keydown', (e) => { if (e.key === 'Enter') run(); });
 
+      // 公共代理诊断面板
+      document.getElementById('probeBtn').addEventListener('click', () => probeChannels());
+
       async function run() {
-        const target = input.value.trim();
-        setError('');
-        if (!target) { setError('请输入网址'); return; }
-        let normalized;
-        try { normalized = new URL(/^https?:\/\//i.test(target) ? target : 'https://' + target).href; }
-        catch (e) { setError('网址格式不正确'); return; }
+        if (location.protocol === 'file:') {
+          setError('请用 HTTP 访问（如 npx serve . 或 python -m http.server），file:// 下浏览器会限制跨源测速与读取');
+          return;
+        }
+
+        const manualMode = document.getElementById('manualMode').checked;
+        let urls = [];
+        let normalized = '';
+
+        if (manualMode) {
+          const text = document.getElementById('urlList').value.trim();
+          if (!text) { setError('请粘贴 URL 列表'); return; }
+          const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l);
+          for (const line of lines) {
+            try {
+              const u = new URL(/^https?:\/\//i.test(line) ? line : 'https://' + line);
+              if (u.protocol === 'http:' || u.protocol === 'https:') urls.push(u.href);
+            } catch (e) { }
+          }
+          urls = [...new Set(urls)];
+          if (urls.length === 0) { setError('没有有效的 URL'); return; }
+          normalized = urls[0];
+        } else {
+          const target = input.value.trim();
+          setError('');
+          if (!target) { setError('请输入网址'); return; }
+          try { normalized = new URL(/^https?:\/\//i.test(target) ? target : 'https://' + target).href; }
+          catch (e) { setError('网址格式不正确'); return; }
+        }
 
         stopRequested = false;
         sessionController = new AbortController();
@@ -331,11 +476,22 @@
         resultBody.innerHTML = '';
         progressBar.style.width = '0';
         progressWrap.classList.add('show');
-        setStatus('正在抓取页面并提取 URL...');
 
-        let urls;
-        try {
-          const html = await fetchText(normalized);
+        if (!manualMode) {
+          setStatus('正在抓取页面并提取 URL（多通道竞速中）...');
+          let html, via = '';
+          try {
+            const r = await fetchText(normalized);
+            html = r.text;
+            via = r.via + ' · ' + r.ms + 'ms';
+          } catch (err) {
+            setError('抓取失败，各通道结果：\n' + err.message +
+              '\n\n建议：改用「手动 URL 列表」模式，不需要任何抓取通道；或点开「公共代理诊断」看当前哪些代理还活着。');
+            progressWrap.classList.remove('show');
+            btn.disabled = false;
+            return;
+          }
+          setStatus('已通过 ' + via + ' 抓取成功，正在提取地址...');
           urls = extractUrls(html, normalized);
           setStatus('正在提取 JS 动态生成的地址...');
           const dynamic = await collectScriptLinks(html, normalized, 8000);
@@ -346,30 +502,26 @@
             } catch (e) { }
           });
           urls = [...new Set(urls)];
-        } catch (err) {
-          setError('抓取页面失败：' + err.message);
-          progressWrap.classList.remove('show');
-          btn.disabled = false;
-          return;
+
+          if (urls.length === 0) {
+            setError('未在页面中找到任何 http/https 地址');
+            progressWrap.classList.remove('show');
+            btn.disabled = false;
+            return;
+          }
+
+          if (!document.getElementById('includeSameSite').checked) {
+            urls = urls.filter((u) => !sameSite(u, normalized));
+            if (urls.length === 0) {
+              setError('页面中的地址全部属于本站（' + normalized + '），已忽略。\n如需连本站地址一起测，勾选「保留同源地址」。');
+              progressWrap.classList.remove('show');
+              btn.disabled = false;
+              return;
+            }
+          }
         }
 
-        if (urls.length === 0) {
-          setError('未在页面中找到任何 http/https 地址');
-          progressWrap.classList.remove('show');
-          btn.disabled = false;
-          return;
-        }
-
-        const skipped = urls.filter((u) => sameSite(u, normalized)).length;
-        urls = urls.filter((u) => !sameSite(u, normalized));
-        if (urls.length === 0) {
-          setError('页面中的地址全部属于本站（' + normalized + '），已忽略，无需测速');
-          progressWrap.classList.remove('show');
-          btn.disabled = false;
-          return;
-        }
-
-        setStatus('共提取到 ' + urls.length + ' 个 URL（已去重' + (skipped ? '，忽略本站 ' + skipped + ' 个' : '') + '），开始测速...');
+        setStatus('共 ' + urls.length + ' 个 URL，开始测速...');
 
         renderInitial(urls);
 
