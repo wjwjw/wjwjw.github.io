@@ -651,8 +651,7 @@
         urlListHint.style.display = show;
         input.placeholder = this.checked ? '模式②：留空即可' : '模式①：https://example.com';
         if (this.checked) {
-          // 打开外部 cfg 面板、展开书签子面板；用户清空时关闭
-          cfgPanel.open = true;
+          // 手动模式与代理无关：只展开书签子面板；cfgPanel 保持折叠状态（用户主动点开才算）
           bkPanel.open = true;
         } else {
           bkPanel.open = false;
