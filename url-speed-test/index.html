@@ -99,7 +99,7 @@
       <button id="startBtn">开始测速</button>
       <button id="stopBtn" style="display:none" class="danger">停止</button>
     </div>
-    <textarea id="urlList" placeholder="模式②：手动粘贴 URL 列表（每行一个），留空则用模式①" style="width:100%;height:100px;margin-top:10px;font-family:monospace;font-size:13px;background:#181818;color:#eee;border:1px solid #333;border-radius:8px;padding:10px;display:none;"></textarea>
+    <textarea id="urlList" placeholder="模式②：每行一个 URL；也可以第一行写 # 来源页 URL + 下面粘贴整段网页 HTML 代码（自动解析）" style="width:100%;height:100px;margin-top:10px;font-family:monospace;font-size:13px;background:#181818;color:#eee;border:1px solid #333;border-radius:8px;padding:10px;display:none;"></textarea>
     <label style="display:block;margin-top:8px;font-size:13px;color:#999;">
       <input type="checkbox" id="manualMode" onchange="document.getElementById('urlList').style.display=this.checked?'block':'none';document.getElementById('urlInput').placeholder=this.checked?'模式②：留空即可':'模式①：https://example.com'" /> 使用手动 URL 列表模式（无需抓取通道）
     </label>
@@ -378,6 +378,81 @@
         });
       }
 
+      // 从粘贴进来的 HTML 片段中提 URL（无 base 时只接受绝对 URL）
+      function parseHtmlForUrls(html, base) {
+        const urls = new Set();
+        const allowRel = !!base;
+        const baseUrl = base ? new URL(base) : null;
+        const absolutize = (raw) => {
+          if (!raw) return null;
+          raw = String(raw).trim();
+          if (!raw || raw.startsWith('#') || raw.startsWith('data:') || raw.startsWith('javascript:')) return null;
+          try {
+            if (allowRel) {
+              const u = new URL(raw, baseUrl.href);
+              return u.protocol === 'http:' || u.protocol === 'https:' ? u.href : null;
+            }
+            if (/^https?:\/\//i.test(raw)) {
+              const u = new URL(raw);
+              return u.protocol === 'http:' || u.protocol === 'https:' ? u.href : null;
+            }
+            return null;
+          } catch (e) { return null; }
+        };
+
+        // 1) 标签属性：href / src / srcset / data-* / form action
+        const tagRe = /<(a|img|script|link|iframe|video|audio|source|embed|form)\b[^>]*>/gi;
+        const attrRe = /(href|src|srcset|data-src|data-href|data-original|data-url|action)\s*=\s*("([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/gi;
+        let m;
+        while ((m = tagRe.exec(html))) {
+          const tag = m[1].toLowerCase();
+          attrRe.lastIndex = 0;
+          let a;
+          while ((a = attrRe.exec(m[0]))) {
+            const attr = (a[1] || '').toLowerCase();
+            const v = a[3] || a[4] || a[5];
+            if (!v) continue;
+            if (tag === 'link' && !/stylesheet|icon|manifest|preload|preconnect|dns-prefetch/i.test(m[0])) continue;
+            if (attr === 'srcset') {
+              v.split(',').forEach(p => { const u = absolutize(p.trim().split(/\s+/)[0]); if (u) urls.add(u); });
+            } else {
+              const u = absolutize(v);
+              if (u) urls.add(u);
+            }
+          }
+        }
+
+        // 2) meta refresh / og:url
+        const metaRefreshRe = /<meta[^>]+http-equiv\s*=\s*["']?refresh["']?[^>]*content\s*=\s*["']([^"']+)["']/gi;
+        while ((m = metaRefreshRe.exec(html))) {
+          const mm = /url\s*=\s*(.+)$/i.exec(m[1]);
+          if (mm) { const u = absolutize(mm[1].trim().replace(/["']/g, '')); if (u) urls.add(u); }
+        }
+
+        // 3) CSS url()
+        const cssRe = /url\(\s*(['"]?)([^'")]+)\1\s*\)/gi;
+        while ((m = cssRe.exec(html))) {
+          const u = absolutize(m[2]);
+          if (u) urls.add(u);
+        }
+
+        // 4) <script> 字符串内的 URL（双引号 / 单引号 / 无引号裸 URL）
+        const scriptRe = /<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi;
+        const urlInStr = /(?:https?:\/\/|www\.)[^\s"'<>)\]]+/gi;
+        while ((m = scriptRe.exec(html))) {
+          const body = m[1];
+          let u;
+          while ((u = urlInStr.exec(body))) {
+            // 去掉尾随的标点
+            const raw = u[0].replace(/[.,;:!?)]+$/, '');
+            const abs = absolutize(raw.startsWith('www.') ? 'http://' + raw : raw);
+            if (abs) urls.add(abs);
+          }
+        }
+
+        return [...urls];
+      }
+
       function extractUrls(html, base) {
         const urls = new Set();
         const add = (raw) => {
@@ -562,20 +637,39 @@
 
         if (manualMode) {
           const raw = document.getElementById('urlList').value;
-          if (!raw.trim()) { setError('请粘贴 URL 列表'); return; }
+          if (!raw.trim()) { setError('请粘贴 URL 列表或网页代码'); return; }
           // 书签脚本会在最前面写一行 "# 来源页 URL"，据此可对同站地址做同样过滤
           const baseMatch = /^#\s*(\S+)/m.exec(raw);
           const pageBase = baseMatch ? baseMatch[1] : '';
-          const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(l => l && l.charAt(0) !== '#');
-          for (const line of lines) {
-            try {
-              const u = new URL(/^https?:\/\//i.test(line) ? line : 'https://' + line);
-              if (u.protocol === 'http:' || u.protocol === 'https:') urls.push(u.href);
-            } catch (e) { }
+          // 是否按 HTML 解析：含标签首部 + 多行 + 不像是简单 URL 列表
+          const looksHtml = /<\s*(html|body|head|!doctype|a\s|script|link|img)\b/i.test(raw)
+            && (raw.split(/\r?\n/).length > 5 || raw.length > 400);
+
+          if (looksHtml) {
+            // 页面代码模式：交给 parseHtmlForUrls；没填 # 来源行时按纯 HTML 片段处理（只接受绝对 URL）
+            setStatus('正在解析粘贴的 HTML（' + (raw.length / 1024).toFixed(1) + ' KB）...');
+            urls = parseHtmlForUrls(pageBase ? raw.replace(baseMatch[0], '') : raw, pageBase);
+            urls = [...new Set(urls)];
+            if (urls.length === 0) {
+              setError(pageBase
+                ? '没从这段 HTML 里解析到任何 http/https 链接'
+                : '没从这段 HTML 里解析到任何 http/https 链接（提示：第一行写 # 来源页 URL 可以解析相对路径）');
+              return;
+            }
+            normalized = pageBase || urls[0];
+          } else {
+            // 纯 URL 列表模式（兼容原有行为）
+            const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(l => l && l.charAt(0) !== '#');
+            for (const line of lines) {
+              try {
+                const u = new URL(/^https?:\/\//i.test(line) ? line : 'https://' + line);
+                if (u.protocol === 'http:' || u.protocol === 'https:') urls.push(u.href);
+              } catch (e) { }
+            }
+            urls = [...new Set(urls)];
+            if (urls.length === 0) { setError('没有有效的 URL'); return; }
+            normalized = pageBase || urls[0];
           }
-          urls = [...new Set(urls)];
-          if (urls.length === 0) { setError('没有有效的 URL'); return; }
-          normalized = pageBase || urls[0];
           if (pageBase && !document.getElementById('includeSameSite').checked) {
             urls = urls.filter((u) => !sameSite(u, pageBase));
             if (urls.length === 0) {
