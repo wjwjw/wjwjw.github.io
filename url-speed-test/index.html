@@ -783,10 +783,14 @@
         btn.disabled = true;
         stopBtn.style.display = 'inline-block';
         stopBtn.disabled = false;
-        resultCard.classList.remove('show');
+        // 清空全部历史结果与状态——保证连跑两次不会有旧 URL 残留
         resultBody.innerHTML = '';
+        rowMap.clear();
+        resultCard.classList.remove('show');
         sourceLine.classList.remove('show', 'expanded');
         sourceExpandEl.textContent = '展开通道详情';
+        resultTotal.textContent = '';
+        errorBox.style.display = 'none';
         progressBar.style.width = '0';
         progressWrap.classList.add('show');
 
