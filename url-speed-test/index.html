@@ -75,14 +75,23 @@
     #channelReport .ok { color: #4caf50; }
     #channelReport .bad { color: #ef5350; }
     .via { color: #6b7280; font-size: 12px; margin-left: 8px; }
+    .bk-card { background: #181818; border: 1px solid #2a2a2a; border-radius: 8px; padding: 14px; margin-top: 14px; }
+    .bk-head { font-size: 13px; font-weight: 600; color: #ddd; margin-bottom: 10px; }
+    .bk-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    a.bk-drag { display: inline-block; padding: 10px 20px; background: #2e7d32; color: #fff; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px; cursor: grab; border: 1px dashed #81c784; }
+    a.bk-drag:hover { background: #388e3c; }
+    .bk-tip { font-size: 12px; color: #999; }
+    .bk-steps { margin: 10px 0 0 20px; font-size: 12px; color: #bbb; line-height: 1.9; }
+    .bk-steps a { color: #64b5f6; }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>网页 URL 测速工具</h1>
     <p class="sub">两种模式：<br>
-      ① <b>自动提取</b>：输入网址，抓取页面提取所有链接（依赖公共代理，见下方"公共代理诊断"）<br>
-      ② <b>手动列表</b>：直接粘贴 URL 列表（每行一个），不需要任何抓取通道，测真实连接延迟
+      ① <b>自动提取</b>：输入网址，抓取页面提取所有链接（依赖 CORS 代理，国内经常连不上）<br>
+      ② <b>手动列表</b>：直接粘贴 URL 列表（每行一个），不需要任何抓取通道，测真实连接延迟<br>
+      拿链接列表最省事的办法：用下面的「提取本页链接」书签，在目标页面上点一下，全部链接就进剪贴板了
     </p>
 
     <div class="input-row">
@@ -95,8 +104,25 @@
       <input type="checkbox" id="manualMode" onchange="document.getElementById('urlList').style.display=this.checked?'block':'none';document.getElementById('urlInput').placeholder=this.checked?'模式②：留空即可':'模式①：https://example.com'" /> 使用手动 URL 列表模式（无需抓取通道）
     </label>
     <label style="display:block;margin-top:6px;font-size:13px;color:#999;">
-      <input type="checkbox" id="includeSameSite" /> 自动提取时保留同源地址（默认只测外部地址）
+      <input type="checkbox" id="includeSameSite" /> 保留同源地址（默认只测外部地址；书签提取带来源行时同样生效）
     </label>
+
+    <div class="bk-card">
+      <div class="bk-head">书签提取 —— 在目标页面点一下就拿到全部链接，不依赖任何代理（推荐）</div>
+      <div class="bk-row">
+        <a class="bk-drag" draggable="true" title="拖到浏览器书签栏" href="javascript:(function(){var D=document,S=new Set();function A(v){if(!v)return;try{var u=new URL(v,location.href);if(u.protocol=='http:'||u.protocol=='https:')S.add(u.href)}catch(e){}}D.querySelectorAll('a[href],img[src],script[src],link[href],iframe[src],source[src],video[src],audio[src],embed[src],form[action]').forEach(function(el){A(el.getAttribute('href'));A(el.getAttribute('src'));A(el.getAttribute('action'))});D.querySelectorAll('[srcset]').forEach(function(el){(el.getAttribute('srcset')||'').split(',').forEach(function(p){A(p.trim().split(/\s+/)[0])})});D.querySelectorAll('[data-src],[data-href],[data-original],[data-url]').forEach(function(el){A(el.getAttribute('data-src'));A(el.getAttribute('data-href'));A(el.getAttribute('data-original'));A(el.getAttribute('data-url'))});var L=[].slice.call(S).sort(),T=L.join('\n'),F='# '+location.href+'\n'+T;var o=D.createElement('div');o.style.cssText='position:fixed;z-index:2147483647;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:20px';var b=D.createElement('div');b.style.cssText='background:#fff;color:#111;border-radius:12px;width:90%;max-width:680px;padding:20px;font:14px/1.5 Arial,sans-serif';var h=D.createElement('div');h.style.cssText='font-weight:700;margin-bottom:10px';h.textContent='共 '+L.length+' 个链接';var x=D.createElement('textarea');x.value=F;x.readOnly=true;x.style.cssText='width:100%;height:260px;box-sizing:border-box;padding:8px;font:12px/1.4 monospace;border:1px solid #ccc;border-radius:6px';var r=D.createElement('div');r.style.cssText='margin-top:10px;text-align:right';var c=D.createElement('button');c.textContent='复制';c.style.cssText='padding:8px 16px;border:0;border-radius:6px;background:#2563eb;color:#fff;font-weight:600;cursor:pointer;margin-right:8px';c.onclick=function(){x.select();try{D.execCommand('copy');h.textContent='已复制 —— 共 '+L.length+' 个链接'}catch(e){h.textContent='请按 Ctrl+C 复制 —— 共 '+L.length+' 个链接'}};var q=D.createElement('button');q.textContent='关闭';q.style.cssText='padding:8px 16px;border:0;border-radius:6px;background:#6b7280;color:#fff;font-weight:600;cursor:pointer';q.onclick=function(){o.parentNode&&o.parentNode.removeChild(o)};r.appendChild(c);r.appendChild(q);b.appendChild(h);b.appendChild(x);b.appendChild(r);o.appendChild(b);o.onclick=function(e){if(e.target===o)o.parentNode.removeChild(o)};D.body.appendChild(o);x.focus();x.select();var ok=false;try{ok=D.execCommand('copy')}catch(e){}if(ok){h.textContent='已复制到剪贴板 —— 共 '+L.length+' 个链接'}else if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(F).then(function(){h.textContent='已复制到剪贴板 —— 共 '+L.length+' 个链接'},function(){h.textContent='请按 Ctrl+C 复制 —— 共 '+L.length+' 个链接'})}else{h.textContent='请按 Ctrl+C 复制 —— 共 '+L.length+' 个链接'}})()">提取本页链接</a>
+        <span class="bk-tip">按住拖到浏览器书签栏（书签栏没显示就按 Ctrl+Shift+B）</span>
+      </div>
+      <ol class="bk-steps">
+        <li>把上面这个绿色按钮<b>拖到书签栏</b>，成为 一个书签</li>
+        <li>打开你想测速的网页，等它加载完，<b>点书签栏里的「提取本页链接」</b></li>
+        <li>弹出列表并自动复制，回到本页 <a href="javascript:void(0)" id="openManual">展开手动列表粘贴框</a>，Ctrl+V 粘贴后点「开始测速」</li>
+      </ol>
+      <div class="cfg-hint" style="margin-top:8px;">
+        提取的是页面渲染后的真实链接（JS 动态生成的也能抓到）；列表第一行 <code># 网址</code> 是来源页标记，本页会据此自动过滤同站地址。
+        全程在你的浏览器里完成，不经过任何服务器，没有 CORS、没有被墙问题。
+      </div>
+    </div>
 
     <details class="cfg" id="cfgPanel">
       <summary>公共代理诊断（自动提取失败时点开这里）</summary>
@@ -471,6 +497,19 @@
       // 公共代理诊断面板
       document.getElementById('probeBtn').addEventListener('click', () => probeChannels());
 
+      // 书签脚本：点「展开手动列表粘贴框」直接打开粘贴区并聚焦
+      document.getElementById('openManual').addEventListener('click', function (e) {
+        e.preventDefault();
+        const cb = document.getElementById('manualMode');
+        const ta = document.getElementById('urlList');
+        cb.checked = true;
+        ta.style.display = 'block';
+        input.placeholder = '模式②：留空即可';
+        ta.focus();
+        this.textContent = '已展开，粘贴后点「开始测速」';
+        this.style.color = '#4caf50';
+      });
+
       // ---------- 自建代理：保存 / 测试 ----------
       const proxyInput = document.getElementById('customProxy');
       const proxyTestResult = document.getElementById('proxyTestResult');
@@ -522,9 +561,12 @@
         let normalized = '';
 
         if (manualMode) {
-          const text = document.getElementById('urlList').value.trim();
-          if (!text) { setError('请粘贴 URL 列表'); return; }
-          const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l);
+          const raw = document.getElementById('urlList').value;
+          if (!raw.trim()) { setError('请粘贴 URL 列表'); return; }
+          // 书签脚本会在最前面写一行 "# 来源页 URL"，据此可对同站地址做同样过滤
+          const baseMatch = /^#\s*(\S+)/m.exec(raw);
+          const pageBase = baseMatch ? baseMatch[1] : '';
+          const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(l => l && l.charAt(0) !== '#');
           for (const line of lines) {
             try {
               const u = new URL(/^https?:\/\//i.test(line) ? line : 'https://' + line);
@@ -533,7 +575,16 @@
           }
           urls = [...new Set(urls)];
           if (urls.length === 0) { setError('没有有效的 URL'); return; }
-          normalized = urls[0];
+          normalized = pageBase || urls[0];
+          if (pageBase && !document.getElementById('includeSameSite').checked) {
+            urls = urls.filter((u) => !sameSite(u, pageBase));
+            if (urls.length === 0) {
+              setError('列表里的地址全部与来源页同站（' + pageBase + '），已全部过滤。\n如需保留同站地址，勾选「保留同源地址」。');
+              progressWrap.classList.remove('show');
+              btn.disabled = false;
+              return;
+            }
+          }
         } else {
           const target = input.value.trim();
           setError('');
