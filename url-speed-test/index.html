@@ -33,6 +33,25 @@
     .card.show { display: block; }
     .card-head { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-bottom: 1px solid #2a2a2a; font-weight: 600; }
     .card-head .total { color: #999; font-size: 12px; font-weight: 400; }
+    .source-line {
+      padding: 10px 18px; border-bottom: 1px solid #232323; background: #161616;
+      font-size: 12px; color: #999; line-height: 1.7; word-break: break-all;
+      display: none;
+    }
+    .source-line.show { display: block; }
+    .source-line .src { color: #64b5f6; }
+    .source-line .via { color: #bbb; margin-left: 6px; }
+    .source-line .expand {
+      margin-left: 10px; padding: 2px 8px; font-size: 11px;
+      background: #222; color: #9e9e9e; border: 1px solid #2e2e2e; border-radius: 4px;
+      cursor: pointer; user-select: none;
+    }
+    .source-line .expand:hover { color: #eee; background: #2a2a2a; }
+    .source-line .channels { display: none; margin-top: 6px; padding-top: 6px; border-top: 1px dashed #2a2a2a; }
+    .source-line.expanded .channels { display: block; }
+    .source-line .ch { padding: 2px 0; }
+    .source-line .ok { color: #4caf50; }
+    .source-line .bad { color: #ef5350; }
     table { width: 100%; border-collapse: collapse; }
     th, td { padding: 11px 18px; text-align: left; font-size: 13px; }
     thead th { background: #1f1f1f; color: #999; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
@@ -154,6 +173,10 @@
         <span>测速结果</span>
         <span class="total" id="resultTotal"></span>
       </div>
+      <div class="source-line" id="sourceLine">
+        <span>🔗 来源页：<a id="sourceUrl" class="src" href="#" target="_blank" rel="noopener"></a><span class="via" id="sourceVia"></span><span class="expand" id="sourceExpand" title="查看各抓取通道结果">展开通道详情</span></span>
+        <div class="channels" id="sourceChannels"></div>
+      </div>
       <table>
         <thead>
           <tr><th>排名</th><th>地址</th><th>平均耗时</th><th>5 次样本 (ms)</th></tr>
@@ -175,6 +198,16 @@
       const resultCard = document.getElementById('resultCard');
       const resultBody = document.getElementById('resultBody');
       const resultTotal = document.getElementById('resultTotal');
+      const sourceLine = document.getElementById('sourceLine');
+      const sourceUrlEl = document.getElementById('sourceUrl');
+      const sourceViaEl = document.getElementById('sourceVia');
+      const sourceChannelsEl = document.getElementById('sourceChannels');
+      const sourceExpandEl = document.getElementById('sourceExpand');
+
+      sourceExpandEl.addEventListener('click', () => {
+        sourceLine.classList.toggle('expanded');
+        sourceExpandEl.textContent = sourceLine.classList.contains('expanded') ? '收起通道详情' : '展开通道详情';
+      });
 
       const TEST_TIMES = 5;
       const SAMPLE_TIMEOUT = 15000;
@@ -196,7 +229,7 @@
 
       // ---------- 自建代理（优先于公共代理；localStorage 持久化）----------
       const CUSTOM_KEY = 'ust_custom_proxy';
-      const DEFAULT_CUSTOM_PROXY = 'https://cors-proxy.ghjuctgcf.workers.dev/?url='; // 自建 CF Worker，无需配置默认生效；诊断面板可改
+      const DEFAULT_CUSTOM_PROXY = ''; // 默认空，自动模式依赖公共代理；用户可填自建代理地址
       let customTpl = DEFAULT_CUSTOM_PROXY;
       try {
         const saved = localStorage.getItem(CUSTOM_KEY);
@@ -227,8 +260,10 @@
       }
 
       // 所有通道同时出发，谁先拿到有效内容用谁，其余立即取消
+      // 返回结果里附带 viaList（所有通道的尝试结果：✅/❌/⏱），方便完成后在状态栏告诉用户"这次内容是哪儿来的"
       function raceChannels(channels) {
         const reasons = [];
+        const viaList = [];
         return new Promise((resolve, reject) => {
           let settled = false, finished = 0;
           channels.forEach((ch) => {
@@ -236,18 +271,23 @@
             const timer = setTimeout(() => ctl.abort(), CHANNEL_TIMEOUT);
             const t0 = performance.now();
             (async () => {
+              let outcome = '';
               try {
                 const resp = await fetch(ch.url, { redirect: 'follow', signal: ctl.signal });
                 if (!resp.ok) throw new Error('HTTP ' + resp.status);
                 const text = await resp.text();
                 if (text.length < 50) throw new Error('内容过短(' + text.length + 'B)');
+                const ms = Math.round(performance.now() - t0);
+                outcome = '✅ ' + ch.name + ' · ' + ms + 'ms';
                 if (!settled) {
                   settled = true;
-                  resolve({ text, via: ch.name, ms: Math.round(performance.now() - t0) });
+                  resolve({ text, via: ch.name, ms, viaList });
                 }
               } catch (e) {
+                outcome = '❌ ' + ch.name + ' · ' + (e.name === 'AbortError' ? '超时' : e.message);
                 if (!settled) reasons.push(ch.name + ' → ' + (e.name === 'AbortError' ? '超时/取消' : e.message));
               } finally {
+                if (outcome) viaList.push(outcome);
                 clearTimeout(timer);
                 if (!settled) { try { ctl.abort(); } catch (e) { } }
                 if (++finished === channels.length && !settled) {
@@ -497,6 +537,7 @@
 
       let stopRequested = false;
       let sessionController = null;
+      let lastExtractionInfo = null; // 最近一次提取的来源页/抓取通道，便于结果区溯源
 
       function stop() {
         stopRequested = true;
@@ -667,6 +708,7 @@
               return;
             }
             normalized = pageBase || urls[0];
+            lastExtractionInfo = { source: normalized, via: '粘贴 HTML', viaList: [] };
           } else {
             // 纯 URL 列表模式（兼容原有行为）
             const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(l => l && l.charAt(0) !== '#');
@@ -679,6 +721,10 @@
             urls = [...new Set(urls)];
             if (urls.length === 0) { setError('没有有效的 URL'); return; }
             normalized = pageBase || urls[0];
+            // 纯 URL 列表：没有抓取通道，via 标 "直接输入"，保留列表第一行作为来源
+            lastExtractionInfo = pageBase
+              ? { source: pageBase, via: '直接输入（带来源页）', viaList: [] }
+              : { source: urls[0], via: '直接输入', viaList: [] };
           }
           if (pageBase && !document.getElementById('includeSameSite').checked) {
             urls = urls.filter((u) => !sameSite(u, pageBase));
@@ -704,16 +750,19 @@
         stopBtn.disabled = false;
         resultCard.classList.remove('show');
         resultBody.innerHTML = '';
+        sourceLine.classList.remove('show', 'expanded');
+        sourceExpandEl.textContent = '展开通道详情';
         progressBar.style.width = '0';
         progressWrap.classList.add('show');
 
         if (!manualMode) {
           setStatus('正在抓取页面并提取 URL（多通道竞速中）...');
-          let html, via = '';
+          let html, via = '', viaList = [];
           try {
             const r = await fetchText(normalized);
             html = r.text;
             via = r.via + ' · ' + r.ms + 'ms';
+            viaList = r.viaList || [];
           } catch (err) {
             setError('抓取失败，各通道结果：\n' + err.message +
               '\n\n建议：改用「手动 URL 列表」模式，不需要任何抓取通道；或点开「公共代理诊断」看当前哪些代理还活着。');
@@ -721,6 +770,12 @@
             btn.disabled = false;
             return;
           }
+          // 来源页提示：完整记录本次内容由哪个通道拉来、其他通道的尝试结果
+          lastExtractionInfo = {
+            source: normalized,
+            via: via,
+            viaList: viaList
+          };
           setStatus('已通过 ' + via + ' 抓取成功，正在提取地址...');
           urls = extractUrls(html, normalized);
           setStatus('正在提取 JS 动态生成的地址...');
@@ -797,10 +852,38 @@
 
       const rowMap = new Map();
 
+      // 把上一次提取来源 / 抓取通道渲染到结果卡片头部
+      function renderSourceLine() {
+        const info = lastExtractionInfo;
+        if (!info || !info.source) { sourceLine.classList.remove('show', 'expanded'); return; }
+        sourceUrlEl.textContent = info.source;
+        sourceUrlEl.href = info.source;
+        let viaTxt = '';
+        if (info.via) viaTxt = ' · ' + info.via;
+        sourceViaEl.textContent = viaTxt;
+        if (info.viaList && info.viaList.length) {
+          sourceChannelsEl.innerHTML = info.viaList.map((line) => {
+            const ok = /^[✅]/.test(line);
+            return '<div class="ch ' + (ok ? 'ok' : 'bad') + '">' + escapeHtml(line) + '</div>';
+          }).join('');
+          sourceExpandEl.style.display = '';
+        } else {
+          sourceChannelsEl.innerHTML = '';
+          sourceExpandEl.style.display = 'none';
+          sourceLine.classList.remove('expanded');
+          sourceExpandEl.textContent = '展开通道详情';
+        }
+        sourceLine.classList.add('show');
+      }
+      function escapeHtml(s) {
+        return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+      }
+
       function renderInitial(urls) {
         resultBody.innerHTML = '';
         resultCard.classList.add('show');
         resultTotal.textContent = '共 ' + urls.length + ' 个地址，测试中...';
+        renderSourceLine();
 
         urls.forEach((url, idx) => {
           const tr = document.createElement('tr');
