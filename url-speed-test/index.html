@@ -725,9 +725,13 @@
           // 书签脚本会在最前面写一行 "# 来源页 URL"，据此可对同站地址做同样过滤
           const baseMatch = /^#\s*(\S+)/m.exec(raw);
           const pageBase = baseMatch ? baseMatch[1] : '';
-          // 是否按 HTML 解析：含标签首部 + 多行 + 不像是简单 URL 列表
-          const looksHtml = /<\s*(html|body|head|!doctype|a\s|script|link|img)\b/i.test(raw)
-            && (raw.split(/\r?\n/).length > 5 || raw.length > 400);
+          // 是否按 HTML 解析：含标签首部 + 多行 / 长度足够 / 含明确的 </a> 闭合（Google noscript 单行片段常见）
+          // 长度阈值从 400 调到 200 是为了接住单行几十字节的 noscript 片段
+          const looksHtml = (
+            /<\s*(html|body|head|!doctype|a\s|script|link|img)\b/i.test(raw)
+            || /<\/a>/i.test(raw)  // 单行 <a href=...> 也算 HTML
+          )
+            && (raw.split(/\r?\n/).length > 5 || raw.length > 200);
 
           if (looksHtml) {
             // 页面代码模式：交给 parseHtmlForUrls；没填 # 来源行时按纯 HTML 片段处理（只接受绝对 URL）
