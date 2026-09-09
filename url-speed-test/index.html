@@ -65,6 +65,8 @@
     .cfg-row input[type=text]:focus { border-color: #2196f3; }
     .cfg-hint { font-size: 11px; color: #6b7280; margin-top: 6px; line-height: 1.6; }
     .cfg-hint code { background: #222; padding: 1px 5px; border-radius: 3px; color: #ffd54f; }
+    .cfg-hint .ok { color: #4caf50; }
+    .cfg-hint .bad { color: #ef5350; }
     .btn-sm { padding: 8px 14px; font-size: 12px; font-weight: 500; background: #2b2b2b; color: #ddd; border: 1px solid #3a3a3a; }
     .btn-sm:hover:not(:disabled) { background: #383838; }
     #channelReport { margin-top: 12px; font-size: 12px; line-height: 1.9; color: #999; }
@@ -98,6 +100,18 @@
 
     <details class="cfg" id="cfgPanel">
       <summary>公共代理诊断（自动提取失败时点开这里）</summary>
+      <div class="cfg-row">
+        <label>自建代理</label>
+        <input type="text" id="customProxy" placeholder="https://cors-proxy.你的子域.workers.dev/?url=" spellcheck="false" />
+        <button type="button" class="btn-sm" id="saveProxyBtn">保存</button>
+        <button type="button" class="btn-sm" id="testProxyBtn">测试</button>
+      </div>
+      <div class="cfg-hint">
+        填自己的代理地址（我们自建的 Cloudflare Worker），形如 <code>https://cors-proxy.&lt;子域&gt;.workers.dev/?url=</code>。<br>
+        写法：以 <code>?url=</code> / <code>?quest=</code> 结尾 → 自动拼上目标地址；也可以写 <code>.../?url={url}</code>（URL 编码）或 <code>.../{raw}</code>（原样拼接）。<br>
+        保存在浏览器本地（localStorage），下次打开自动生效；留空则只用公共代理。
+      </div>
+      <div id="proxyTestResult" class="cfg-hint"></div>
       <div class="cfg-row">
         <button type="button" class="btn-sm" id="probeBtn">检测代理可用性</button>
       </div>
@@ -158,8 +172,30 @@
       ];
       const CHANNEL_TIMEOUT = 12000;
 
+      // ---------- 自建代理（优先于公共代理；localStorage 持久化）----------
+      const CUSTOM_KEY = 'ust_custom_proxy';
+      const DEFAULT_CUSTOM_PROXY = 'https://cors-proxy.ghjuctgcf.workers.dev/?url='; // 自建 CF Worker，无需配置默认生效；诊断面板可改
+      let customTpl = DEFAULT_CUSTOM_PROXY;
+      try {
+        const saved = localStorage.getItem(CUSTOM_KEY);
+        if (saved !== null) customTpl = saved; // 存过就以存的为准（空串 = 主动关闭自建代理）
+      } catch (e) { }
+
+      // 模板拼装：{url}=编码后目标地址，{raw}=原样；都不含则直接拼接编码地址
+      function buildFromTpl(tpl, u) {
+        if (tpl.indexOf('{url}') >= 0) return tpl.split('{url}').join(encodeURIComponent(u));
+        if (tpl.indexOf('{raw}') >= 0) return tpl.split('{raw}').join(u);
+        return tpl + encodeURIComponent(u);
+      }
+
+      function allProxies() {
+        const tpl = (customTpl || '').trim();
+        const custom = tpl ? [{ name: '自建代理', build: (u) => buildFromTpl(tpl, u) }] : [];
+        return custom.concat(PUBLIC_PROXIES);
+      }
+
       function buildChannels(url) {
-        return PUBLIC_PROXIES.map((p) => ({ name: p.name, url: p.build(url) }));
+        return allProxies().map((p) => ({ name: p.name, url: p.build(url) }));
       }
 
       function setStatus(t) { statusEl.textContent = t; }
@@ -209,7 +245,7 @@
       async function probeChannels() {
         const report = document.getElementById('channelReport');
         const probeTarget = 'https://example.com/';
-        const items = PUBLIC_PROXIES.map((p) => ({ name: p.name, url: p.build(probeTarget) }));
+        const items = allProxies().map((p) => ({ name: p.name, url: p.build(probeTarget) }));
 
         report.innerHTML = '检测中…（目标 example.com）';
         const rows = await Promise.all(items.map(async (it) => {
@@ -434,6 +470,46 @@
 
       // 公共代理诊断面板
       document.getElementById('probeBtn').addEventListener('click', () => probeChannels());
+
+      // ---------- 自建代理：保存 / 测试 ----------
+      const proxyInput = document.getElementById('customProxy');
+      const proxyTestResult = document.getElementById('proxyTestResult');
+      proxyInput.value = customTpl || '';
+
+      document.getElementById('saveProxyBtn').addEventListener('click', () => {
+        customTpl = (proxyInput.value || '').trim();
+        try {
+          if (customTpl) localStorage.setItem(CUSTOM_KEY, customTpl);
+          else localStorage.removeItem(CUSTOM_KEY);
+        } catch (e) { }
+        proxyTestResult.innerHTML = customTpl
+          ? '<span class="ok">已保存到本地，自动提取时优先使用</span>'
+          : '<span class="bad">已清空，恢复为仅用公共代理</span>';
+      });
+
+      document.getElementById('testProxyBtn').addEventListener('click', async () => {
+        const tpl = (proxyInput.value || '').trim();
+        if (!tpl) { proxyTestResult.innerHTML = '<span class="bad">请先填写代理地址</span>'; return; }
+        let url;
+        try { url = buildFromTpl(tpl, 'https://example.com/'); }
+        catch (e) { proxyTestResult.innerHTML = '<span class="bad">地址格式错误</span>'; return; }
+        proxyTestResult.textContent = '测试中…（目标 example.com）';
+        const ctl = new AbortController();
+        const timer = setTimeout(() => ctl.abort(), 10000);
+        const t0 = performance.now();
+        try {
+          const r = await fetch(url, { redirect: 'follow', signal: ctl.signal });
+          const txt = await r.text();
+          const ms = Math.round(performance.now() - t0);
+          const ok = r.ok && txt.length > 50;
+          proxyTestResult.innerHTML = ok
+            ? '<span class="ok">可用 · HTTP ' + r.status + ' · ' + txt.length + 'B · ' + ms + 'ms —— 记得点「保存」</span>'
+            : '<span class="bad">不可用 · HTTP ' + r.status + ' · 内容 ' + txt.length + 'B · ' + ms + 'ms</span>';
+        } catch (e) {
+          proxyTestResult.innerHTML = '<span class="bad">失败 · ' +
+            (e.name === 'AbortError' ? '超时(10s)' : (e.message || '未知错误')) + '</span>';
+        } finally { clearTimeout(timer); }
+      });
 
       async function run() {
         if (location.protocol === 'file:') {
