@@ -725,13 +725,11 @@
           // 书签脚本会在最前面写一行 "# 来源页 URL"，据此可对同站地址做同样过滤
           const baseMatch = /^#\s*(\S+)/m.exec(raw);
           const pageBase = baseMatch ? baseMatch[1] : '';
-          // 是否按 HTML 解析：含标签首部 + 多行 / 长度足够 / 含明确的 </a> 闭合（Google noscript 单行片段常见）
-          // 长度阈值从 400 调到 200 是为了接住单行几十字节的 noscript 片段
-          const looksHtml = (
-            /<\s*(html|body|head|!doctype|a\s|script|link|img)\b/i.test(raw)
-            || /<\/a>/i.test(raw)  // 单行 <a href=...> 也算 HTML
-          )
-            && (raw.split(/\r?\n/).length > 5 || raw.length > 200);
+          // 是否按 HTML 解析：含 a/script/link/img 等 HTML 标签首部，或 </a> 闭合
+          // - 之前要求行数 > 5 或长度 > 200 才认定 HTML，遗漏了 DevTools 复制单个 <a> 节点这种短块（53 字节）
+          // - 取消长度/行数阈值：只要字符串里出现 a 标签头或 </a>，就认定是 HTML；
+          //   纯 URL 列表每行单独 ^https?:// 匹配，<a/</a> 这两个 token 不会误命中（<a 后要空白，</a 是真实闭合）
+          const looksHtml = /<\s*(html|body|head|!doctype|a\s|script|link|img)\b/i.test(raw) || /<\/a>/i.test(raw);
 
           if (looksHtml) {
             // 页面代码模式：交给 parseHtmlForUrls；没填 # 来源行时按纯 HTML 片段处理（只接受绝对 URL）
