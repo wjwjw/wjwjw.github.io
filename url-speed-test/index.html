@@ -116,7 +116,13 @@
       <button id="startBtn">开始测速</button>
       <button id="stopBtn" style="display:none" class="danger">停止</button>
     </div>
-    <textarea id="urlList" placeholder="模式②：每行一个 URL；也可以第一行写 # 来源页 URL + 下面粘贴整段网页 HTML 代码（自动解析）" style="width:100%;height:100px;margin-top:10px;font-family:monospace;font-size:13px;background:#181818;color:#eee;border:1px solid #333;border-radius:8px;padding:10px;display:none;"></textarea>
+    <textarea id="urlList" placeholder="模式②：每行一个 URL，例如 https://example.com
+—— 或第一行写 # 来源页 URL + 下面粘贴整段网页 HTML 代码（自动解析）
+支持的链接形式：https://x.com、http://x.com、//cdn.x.com/a.js（默认 https）、/path、?q=1 等带 # 来源行时都能解析" style="width:100%;height:100px;margin-top:10px;font-family:monospace;font-size:13px;background:#181818;color:#eee;border:1px solid #333;border-radius:8px;padding:10px;display:none;"></textarea>
+    <div class="cfg-hint" id="urlListHint" style="display:none">
+      HTML 解析范围：<code>href/src/srcset/data-*/form action</code> 属性、<code>meta refresh</code>、CSS <code>url()</code>、<code>&lt;script&gt;</code> 字符串内 URL。
+      第一行写 <code># 来源页 URL</code> → 支持相对路径（<code>/a/b</code>、<code>?q=1</code>）；不填时也接受 <code>//cdn.x.com/...</code> 协议相对。
+    </div>
     <label style="display:block;margin-top:8px;font-size:13px;color:#999;">
       <input type="checkbox" id="manualMode" /> 使用手动 URL 列表模式（无需抓取通道）
     </label>
@@ -638,8 +644,11 @@
       const bkPanel = document.getElementById('bkPanel');
       const cfgPanel = document.getElementById('cfgPanel');
       const urlListEl = document.getElementById('urlList');
+      const urlListHint = document.getElementById('urlListHint');
       document.getElementById('manualMode').addEventListener('change', function () {
-        urlListEl.style.display = this.checked ? 'block' : 'none';
+        const show = this.checked ? 'block' : 'none';
+        urlListEl.style.display = show;
+        urlListHint.style.display = show;
         input.placeholder = this.checked ? '模式②：留空即可' : '模式①：https://example.com';
         if (this.checked) {
           // 打开外部 cfg 面板、展开书签子面板；用户清空时关闭
