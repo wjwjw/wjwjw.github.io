@@ -435,7 +435,9 @@
         });
       }
 
-      // 从粘贴进来的 HTML 片段中提 URL（无 base 时只接受绝对 URL）
+      // 从粘贴进来的 HTML 片段中提 URL
+      // - 无 base 时：接受 http(s):// 绝对 URL，以及 // 协议相对 URL（按 https 兜底，与浏览器默认一致）
+      // - 有 base 时：任意相对/绝对/协议相对都吸收，解析后只能是 http(s)
       function parseHtmlForUrls(html, base) {
         const urls = new Set();
         const allowRel = !!base;
@@ -449,6 +451,8 @@
               const u = new URL(raw, baseUrl.href);
               return u.protocol === 'http:' || u.protocol === 'https:' ? u.href : null;
             }
+            // 协议相对 //cdn.example.com/x.js → 按 https 兜底（与浏览器默认一致）
+            if (/^\/\//.test(raw)) return 'https:' + raw;
             if (/^https?:\/\//i.test(raw)) {
               const u = new URL(raw);
               return u.protocol === 'http:' || u.protocol === 'https:' ? u.href : null;
