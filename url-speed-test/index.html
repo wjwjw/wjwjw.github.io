@@ -261,7 +261,27 @@
 
       // 所有通道同时出发，谁先拿到有效内容用谁，其余立即取消
       // 返回结果里附带 viaList（所有通道的尝试结果：✅/❌/⏱），方便完成后在状态栏告诉用户"这次内容是哪儿来的"
-      function raceChannels(channels) {
+      // 返回内容是否"真的回答了目标"——默认情况下用目标 host 在内容里出现次数做轻量校验，
+      // 出现 0 次就视为"代理自身页面/未抓取"，让下一个通道抢
+      function targetFingerprint(url) {
+        try {
+          const u = new URL(url);
+          const host = u.hostname.toLowerCase().replace(/^www\./, '');
+          const labels = host.split('.').filter((l) => l.length >= 3 && l !== 'com' && l !== 'net' && l !== 'org' && l !== 'cn' && l !== 'io' && l !== 'co');
+          return { host, labels };
+        } catch (e) { return { host: '', labels: [] }; }
+      }
+      function looksOffTopic(text, target) {
+        if (!text) return true;
+        const fp = targetFingerprint(target);
+        if (!fp.host) return false; // 解析不出 host 直接放行
+        const lower = text.toLowerCase();
+        if (lower.indexOf(fp.host) >= 0) return false; // 命中完整 host 直接放行
+        // 没命中 host，但至少有一个非通用 label 命中，认它真回答了
+        for (const lb of fp.labels) if (lower.indexOf(lb) >= 0) return false;
+        return true; // 都没命中 → 答非所问
+      }
+      function raceChannels(channels, target) {
         const reasons = [];
         const viaList = [];
         return new Promise((resolve, reject) => {
@@ -277,6 +297,7 @@
                 if (!resp.ok) throw new Error('HTTP ' + resp.status);
                 const text = await resp.text();
                 if (text.length < 50) throw new Error('内容过短(' + text.length + 'B)');
+                if (target && looksOffTopic(text, target)) throw new Error('答非所问（内容里没出现目标域名）');
                 const ms = Math.round(performance.now() - t0);
                 outcome = '✅ ' + ch.name + ' · ' + ms + 'ms';
                 if (!settled) {
@@ -300,7 +321,7 @@
       }
 
       function fetchText(url) {
-        return raceChannels(buildChannels(url));
+        return raceChannels(buildChannels(url), url);
       }
 
       // ---------- 通道连通性自检 ----------
