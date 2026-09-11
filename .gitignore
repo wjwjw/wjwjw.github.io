@@ -15,6 +15,7 @@ hs_err_pid*
 # ---- 本项目新增排除项 ----
 # 记忆库（含个人笔记 / 局域网 IP 等，绝不入库）
 .workbuddy/
+.workbuddy-ai/
 
 # Android 原生 app 仅本地保留，整个目录不入库（源码/APK/密钥/构建产物）
 tv-h5-app/android/

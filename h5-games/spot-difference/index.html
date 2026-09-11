@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>火眼金睛 · 找不同</title>
+  <link rel="stylesheet" href="../shared/base.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div id="app">
+  <div id="stage">
+    <canvas id="game"></canvas>
+
+    <!-- 游戏内 HUD（DOM 覆盖层，由 game.js 更新） -->
+    <div id="hud" class="hidden">
+      <div class="hud-top">
+        <div class="hud-pill">第 <b id="levelText">1</b> 关</div>
+        <div class="hud-pill">找到 <b id="foundText">0</b>/<b id="totalText">5</b></div>
+        <div class="hud-pill">分数 <b id="scoreText">0</b></div>
+        <div class="hud-pill">最高 <b id="bestText">0</b></div>
+        <div class="hud-pill off" id="comboPill">连击 x<b id="comboText">1</b></div>
+      </div>
+      <div id="timeWrap"><div id="timeFill"></div></div>
+      <div id="toast" class="hidden"></div>
+    </div>
+  </div>
+
+  <!-- 开始界面 -->
+  <div id="startScreen" class="overlay">
+    <div class="card">
+      <div class="title-tag">SPOT THE DIFFERENCE</div>
+      <h1>火眼金睛</h1>
+      <p class="subtitle">左右两幅画 · 找出不一样的地方</p>
+      <div class="howto">
+        <p>右边这幅画和左边藏着<b>好几处不同</b>：颜色、大小、位置，甚至凭空多出或少了一样东西。</p>
+        <p>用<b>方向键 / WASD</b> 移动取景框，对准可疑之处按 <b>OK</b> 标记。</p>
+        <p>点对得分还能加时间，点错要扣 3 秒。全部找齐即可过关。</p>
+        <p>每关换一种天色（<b>晴朗 / 黄昏 / 夜晚 / 春天 / 秋天</b>），破绽越来越多，物件也越铺越满。</p>
+      </div>
+      <p class="best-line">历史最高：<b id="startBest">0</b></p>
+      <button id="btnStart" class="big-btn tv-focus" data-tv-focus autofocus>开始游戏</button>
+      <p class="hint">方向键 / WASD 移动取景框 · OK 标记 · 返回键暂停</p>
+    </div>
+  </div>
+
+  <!-- 暂停 -->
+  <div id="pauseScreen" class="overlay hidden">
+    <div class="card">
+      <h2>暂停中</h2>
+      <p id="pauseStat" class="subtitle"></p>
+      <div class="btn-row">
+        <button id="btnResume" class="big-btn tv-focus" data-tv-focus>继续游戏</button>
+        <button id="btnHint" class="text-btn tv-focus" data-tv-focus>提示 (-20 秒)</button>
+        <button id="btnRestart" class="text-btn tv-focus" data-tv-focus>重开本关</button>
+        <button id="btnMute" class="text-btn tv-focus" data-tv-focus>声音</button>
+        <button id="btnQuit" class="text-btn tv-focus" data-tv-focus>返回标题</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 过关 -->
+  <div id="clearScreen" class="overlay hidden">
+    <div class="card">
+      <div class="title-tag">LEVEL CLEAR</div>
+      <h2 id="clearTitle">第 1 关 · 全部找到！</h2>
+      <div class="score-box">
+        <div class="score-item"><span class="score-label">时间奖励</span><span id="timeBonus" class="score-num">0</span></div>
+        <div class="score-item"><span class="score-label">本局分数</span><span id="clearScore" class="score-num">0</span></div>
+      </div>
+      <p id="clearTip" class="subtitle"></p>
+      <div class="btn-row">
+        <button id="btnNext" class="big-btn tv-focus" data-tv-focus>下一关</button>
+        <button id="btnClearQuit" class="text-btn tv-focus" data-tv-focus>返回标题</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 结束 -->
+  <div id="overScreen" class="overlay hidden">
+    <div class="card">
+      <div class="title-tag">TIME UP</div>
+      <h2>时间到啦</h2>
+      <div class="score-box">
+        <div class="score-item"><span class="score-label">本局分数</span><span id="overScore" class="score-num">0</span></div>
+        <div class="score-item"><span class="score-label">历史最高</span><span id="overBest" class="score-num">0</span></div>
+      </div>
+      <p id="overTip" class="subtitle"></p>
+      <div class="btn-row">
+        <button id="btnReplay" class="big-btn tv-focus" data-tv-focus>再来一次</button>
+        <button id="btnOverQuit" class="text-btn tv-focus" data-tv-focus>返回标题</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 经典脚本（兼容 Android 6 WebView，不用 ES module） -->
+<script src="../shared/input.js"></script>
+<!-- TV 启动器兜底：MainActivity.onKeyDown 会 evaluateJavascript("TVLauncher.handleBack()")，
+     把遥控 BACK 键转发到 TVInput 的 back 事件；没有这个全局对象时 BACK 永远到不了 JS。 -->
+<script>window.TVLauncher=window.TVLauncher||{handleBack:function(){try{window.TVInput&&window.TVInput.trigger('back')}catch(e){}}};</script>
+<script src="../shared/nav.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/scenes.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>

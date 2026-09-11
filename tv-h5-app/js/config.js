@@ -75,6 +75,19 @@ window.APP_CONFIG = {
       tvControls: true
     },
 
+    {
+      id: "spot-difference",
+      title: "火眼金睛",
+      subtitle: "找不同 · 方向键移动取景框，OK 标记",
+      // 同上：icon 用纯字符，避免 emoji 在电视上变方框
+      icon: "找",
+      folder: "spot-difference",
+      entry: "index.html",
+      completed: true,
+      color: "#f2a33c",
+      tvControls: true
+    },
+
     /* ↓↓↓ 后续新游戏照抄这一段，completed 先设 false 即可占位 ↓↓↓ */
     {
       id: "coming-soon",
