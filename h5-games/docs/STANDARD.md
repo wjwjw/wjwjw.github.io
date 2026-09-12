@@ -128,6 +128,13 @@ h5-games/
 | 特性 | 状态 | 替代 |
 |------|------|------|
 | ES Module (`import`/`export`) | ❌ 不支持(Chrome 47) | 用经典 `<script src>` + IIFE / 全局变量 |
+| `class` 声明 / 默认参数 / 解构赋值 | ❌ 不支持(Chrome 47/49) | 构造函数 + `prototype`；缺省值在函数体内 `if (x === undefined) x = v;` 补 |
+| 箭头函数 / `let` / `const` / 模板字符串 / `for...of` / 属性简写 | ❌ 项目统一禁用 | 一律 ES5：`function` + `var` + 字符串拼接 + 索引 for 循环（见下方说明） |
+| `var(--x)` CSS 自定义属性 | ❌ 不支持(Chrome 49+) | 直接写字面值。**失效是静默的**：按钮底色 / 阴影会整条变透明 |
+| `Array.prototype.includes` | ❌ 不支持(Chrome 47) | `indexOf(x) !== -1` |
+| `Object.entries` / `Object.values` | ❌ 不支持(Chrome 54+) | `Object.keys` + 循环 |
+| `padStart` / `padEnd` | ❌ 不支持(Chrome 57+) | 手写补位 |
+| `addEventListener` 的 `{ passive: true }` | ⚠️ 被当成 `capture=true` | 显式传 `false`（老 WebView 不认识 options 对象） |
 | `display: grid` / CSS Grid 布局 | ❌ 不支持(Chrome 57+) | 用 `display:flex;flex-wrap:wrap` + 子元素固定宽度（如 `width:calc(20%-10px)` 模拟 N 列） |
 | `gap` 属性（flexbox 容器上） | ❌ 不支持(Chrome 84+) | 用子元素 `margin` 替代（如 `.container > *{margin:6px;}`） |
 | `min()` / `max()` / `clamp()` CSS 函数 | ❌ 不支持(Chrome 79+) | 用固定值 + `max-width` 组合替代（如 `width:560px;max-width:94vw`） |
@@ -137,7 +144,15 @@ h5-games/
 | `backdrop-filter` / 复杂滤镜 | ⚠️ 性能差/不支持 | 避免或用纯色替代 |
 | `fetch` 跨域 / 模块 | ⚠️ 受限 | 同域静态资源即可；勿跨域 |
 
-✅ **可用**：Canvas 2D、`requestAnimationFrame`、`localStorage`、`addEventListener`、classic `<script>`、**CSS Flexbox（不含 gap）**、`transform`/`opacity`/`calc()`、`pushState`/`popstate`、`@media` 查询。
+✅ **可用**：Canvas 2D、`requestAnimationFrame`、`localStorage`、`addEventListener`、classic `<script>`、**CSS Flexbox（不含 gap）**、`transform`/`opacity`/`calc()`、`pushState`/`popstate`、`@media` 查询、`radial-gradient`、`filter`。
+
+> **关于「箭头函数 / let / const 其实 Chrome 45/41 就支持」**：语法层面确实部分支持，但
+> `class`（Chrome 49+）与**默认参数**在 47 上会直接解析失败，且 `let/const` 的块级语义
+> 在 49 之前与标准不一致（典型坑：`for (let i...)` 里闭包捕获的绑定行为不同）。
+> 与其逐个记版本号，项目统一按 **ES5** 写，并由各游戏 `test/smoke.js` 的静态约束门禁
+> 自动拦截（禁用 `=>` / `let` / `const` / `class` / 模板字符串 / `for...of`）。
+> `maze-challenge` 早期就是 ES6 写的，已整体转译，其 `test/smoke.js` 是这套门禁的完整样例。
+> 注意门禁会先 strip 注释，所以「为什么不能用某语法」的解释写在注释里不会被误报。
 
 > 补充（实测）：Canvas 的 `ctx.ellipse()`、`ctx.setLineDash()`、`ctx.createLinearGradient()`、
 > `ctx.quadraticCurveTo()`、`ctx.clip()` 在 Chrome 47 上均可用，程序化矢量绘图不受限。
@@ -229,7 +244,8 @@ h5-games/
 - [ ] 主按钮出现时自动聚焦，OK(`Enter`/`Space`) 能激活。
 - [ ] 菜单/选择界面能用方向键导航、OK 进入（standalone 与启动器内都行）。
 - [ ] 画布随 `resize` 自适应，在 960×540 逻辑视口正常。
-- [ ] 未使用 §6 禁用的特性（无 ES module / `inset` / `color-mix` / 系统 emoji 核心图形）。
+- [ ] 未使用 §6 禁用的特性（无 ES module / `class` / 箭头函数 / `let` / `const` / 模板字符串
+      / `for...of` / CSS 变量 / `gap` / `inset` / `color-mix` / 系统 emoji 核心图形）。
 - [ ] 覆盖层有渐入过渡，且带 JS 兜底 —— 动画没跑完也不会停在半透明/不可见状态。
 - [ ] 覆盖层父节点没有用 `opacity` 做渐入（否则启动器自动聚焦会失效），且在启动器内主动 `.focus()` 兜底。
 - [ ] 返回键陷阱每次 `popstate` 后都重新占位（连按两次返回仍不离开游戏）。

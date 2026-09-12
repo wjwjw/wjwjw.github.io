@@ -2,7 +2,8 @@
 // 字符: # 墙  F 火墙  I 冰墙  . 地板  @ 起点  E 终点  S 地刺  H 爱心  B 香蕉  P 弹簧
 // monsters: path=[[x,y]...] 沿线 ping-pong 往返; speed=格/秒
 // 设计: 每关保证零伤安全路线; 低关唯一通路=明显安全; 中高关 braid 产生短险/长安全抉择
-const LEVELS = [
+// 用 var 而非 const：目标设备 WebView ≈ Chromium 47，见 ../docs/STANDARD.md §6
+var LEVELS = [
  {
   "name": "L1 你好迷宫",
   "grid": [
