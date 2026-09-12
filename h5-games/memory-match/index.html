@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>记忆翻牌 · 配对</title>
+  <link rel="stylesheet" href="../shared/base.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div id="app">
+  <div id="stage">
+    <canvas id="game"></canvas>
+
+    <!-- 游戏内 HUD（DOM 覆盖层，由 game.js 更新） -->
+    <div id="hud" class="hidden">
+      <div class="hud-top">
+        <div class="hud-pill">第 <b id="levelText">1</b> 关</div>
+        <div class="hud-pill">配对 <b id="pairText">0</b>/<b id="totalPairText">6</b></div>
+        <div class="hud-pill">步数 <b id="moveText">0</b></div>
+        <div class="hud-pill">分数 <b id="scoreText">0</b></div>
+        <div class="hud-pill">最高 <b id="bestText">0</b></div>
+        <div class="hud-pill off" id="comboPill">连击 x<b id="comboText">1</b></div>
+      </div>
+      <div id="timeWrap"><div id="timeFill"></div></div>
+      <div id="toast" class="hidden"></div>
+    </div>
+  </div>
+
+  <!-- 开始界面 -->
+  <div id="startScreen" class="overlay">
+    <div class="card">
+      <div class="title-tag">MEMORY MATCH</div>
+      <h1>记忆翻牌</h1>
+      <p class="subtitle">翻两张一样的 · 把它们配成一对</p>
+      <div class="howto">
+        <p>每关开始时，所有卡片会先<b>亮一下</b>，趁这几秒记住谁在哪一格。</p>
+        <p>卡片扣下后，用<b>方向键 / WASD</b> 移动高亮框，按 <b>OK</b> 翻开卡片。</p>
+        <p>翻开的两张图案<b>相同</b>就配对成功（留下绿勾）；不同的话它们会自己扣回去。</p>
+        <p>连续配对成功有<b>连击加分</b>，配对了还能补 2 秒。全部配对即可过关，时间耗尽就结束。</p>
+      </div>
+      <p class="best-line">历史最高：<b id="startBest">0</b></p>
+      <button id="btnStart" class="big-btn tv-focus" data-tv-focus autofocus>开始游戏</button>
+      <p class="hint">方向键 / WASD 移动 · OK 翻牌 · 返回键暂停</p>
+    </div>
+  </div>
+
+  <!-- 暂停 -->
+  <div id="pauseScreen" class="overlay hidden">
+    <div class="card">
+      <h2>暂停中</h2>
+      <p id="pauseStat" class="subtitle"></p>
+      <div class="btn-row">
+        <button id="btnResume" class="big-btn tv-focus" data-tv-focus>继续游戏</button>
+        <button id="btnRestart" class="text-btn tv-focus" data-tv-focus>重开本关</button>
+        <button id="btnMute" class="text-btn tv-focus" data-tv-focus>声音</button>
+        <button id="btnQuit" class="text-btn tv-focus" data-tv-focus>返回标题</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 过关 -->
+  <div id="clearScreen" class="overlay hidden">
+    <div class="card">
+      <div class="title-tag">LEVEL CLEAR</div>
+      <h2 id="clearTitle">第 1 关 · 全部配对！</h2>
+      <div class="score-box">
+        <div class="score-item"><span class="score-label">时间奖励</span><span id="clearBonus" class="score-num">0</span></div>
+        <div class="score-item"><span class="score-label">翻牌步数</span><span id="clearMoves" class="score-num">0</span></div>
+        <div class="score-item"><span class="score-label">本局分数</span><span id="clearScore" class="score-num">0</span></div>
+      </div>
+      <p id="clearTip" class="subtitle"></p>
+      <div class="btn-row">
+        <button id="btnNext" class="big-btn tv-focus" data-tv-focus>下一关</button>
+        <button id="btnClearQuit" class="text-btn tv-focus" data-tv-focus>返回标题</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 结束 -->
+  <div id="overScreen" class="overlay hidden">
+    <div class="card">
+      <div class="title-tag">TIME UP</div>
+      <h2>时间到啦</h2>
+      <div class="score-box">
+        <div class="score-item"><span class="score-label">本局分数</span><span id="overScore" class="score-num">0</span></div>
+        <div class="score-item"><span class="score-label">翻牌步数</span><span id="overMoves" class="score-num">0</span></div>
+        <div class="score-item"><span class="score-label">历史最高</span><span id="overBest" class="score-num">0</span></div>
+      </div>
+      <p id="overTip" class="subtitle"></p>
+      <div class="btn-row">
+        <button id="btnReplay" class="big-btn tv-focus" data-tv-focus>再来一次</button>
+        <button id="btnOverQuit" class="text-btn tv-focus" data-tv-focus>返回标题</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 经典脚本（兼容 Android 6 WebView，不用 ES module） -->
+<script src="../shared/input.js"></script>
+<!-- TV 启动器兜底：MainActivity.onKeyDown 会 evaluateJavascript("TVLauncher.handleBack()")，
+     把遥控 BACK 键转发到 TVInput 的 back 事件；没有这个全局对象时 BACK 永远到不了 JS。 -->
+<script>window.TVLauncher=window.TVLauncher||{handleBack:function(){try{window.TVInput&&window.TVInput.trigger('back')}catch(e){}}};</script>
+<script src="../shared/nav.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/faces.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>

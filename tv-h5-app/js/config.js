@@ -88,6 +88,19 @@ window.APP_CONFIG = {
       tvControls: true
     },
 
+    {
+      id: "memory-match",
+      title: "记忆翻牌",
+      subtitle: "翻牌配对 · 预览-扣牌-方向键翻相同图案",
+      // icon 用纯字符避免电视 emoji 变方框
+      icon: "记",
+      folder: "memory-match",
+      entry: "index.html",
+      completed: true,
+      color: "#8B6CE8",
+      tvControls: true
+    },
+
     /* ↓↓↓ 后续新游戏照抄这一段，completed 先设 false 即可占位 ↓↓↓ */
     {
       id: "coming-soon",

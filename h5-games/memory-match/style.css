@@ -1,0 +1,222 @@
+/*
+ * style.css —— 记忆翻牌配对
+ * 兼容目标：MiTV4A / Android 6 / WebView ≈ Chromium 47
+ * 不使用 grid / gap / min() / max() / clamp() / inset / color-mix（见 docs/STANDARD.md §6）
+ */
+
+#app {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #0a0f18;
+}
+
+/* ---------- 游戏内 HUD ---------- */
+#hud {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 10px 12px 0;
+  pointer-events: none;
+  z-index: 5;
+}
+#hud.hidden { display: none; }
+
+.hud-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+}
+.hud-pill {
+  margin: 0 5px 7px;
+  background: rgba(20, 26, 44, 0.9);
+  border: 2px solid #303a5c;
+  border-radius: 999px;
+  padding: 5px 17px;
+  font-size: 17px;
+  color: #cfd8e8;
+  white-space: nowrap;
+}
+.hud-pill b { color: #ffd166; font-weight: 700; }
+#comboPill { color: #c4b0ff; border-color: #57479a; }
+#comboPill.off { opacity: 0.35; }
+
+#timeWrap {
+  height: 13px;
+  width: 60%;
+  max-width: 700px;
+  margin: 3px auto 0;
+  background: #1b2135;
+  border: 2px solid #303a5c;
+  border-radius: 999px;
+  overflow: hidden;
+}
+#timeFill {
+  height: 100%;
+  width: 100%;
+  background: #7c6ce8;
+  border-radius: 999px;
+}
+#timeFill.warn { background: #f4a261; }
+#timeFill.danger { background: #e5484d; }
+
+#toast {
+  width: 340px;
+  margin: 14px auto 0;
+  padding: 9px 0;
+  text-align: center;
+  font-size: 20px;
+  font-weight: 700;
+  border-radius: 12px;
+  background: rgba(20, 26, 44, 0.94);
+  border: 2px solid #303a5c;
+  color: #cfd8e8;
+}
+#toast.hidden { display: none; }
+#toast.good { color: #7ee0b8; border-color: #2f6f5a; }
+
+/* ---------- 覆盖层渐入 ----------
+   Chromium 47 支持 @keyframes / animation / transform / opacity。
+
+   ⚠️ 覆盖层本身**不能动 opacity**：启动器注入的 tv-controls.js 用
+   `getComputedStyle(el).opacity === "0"` 判断覆盖层是否可见，再决定把焦点
+   放到哪个按钮上。如果覆盖层从 opacity:0 开始渐入，动画起始帧会被判成
+   「不可见」而漏掉自动聚焦，暂停/过关界面就会按 OK 没反应。
+   所以背景色走 background-color 渐入（opacity 恒为 1），位移+淡入放到卡片上。 */
+@-webkit-keyframes mmBackdropIn {
+  from { background-color: rgba(0, 0, 0, 0); }
+}
+@keyframes mmBackdropIn {
+  from { background-color: rgba(0, 0, 0, 0); }
+}
+@-webkit-keyframes mmCardIn {
+  from { opacity: 0; -webkit-transform: translateY(20px) scale(0.94); }
+  to   { opacity: 1; -webkit-transform: translateY(0) scale(1); }
+}
+@keyframes mmCardIn {
+  from { opacity: 0; transform: translateY(20px) scale(0.94); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+/* 只写 from、不写 to：终态自动取元素自身的 background-color */
+.overlay.anim-in {
+  -webkit-animation: mmBackdropIn 0.34s ease-out both;
+  animation: mmBackdropIn 0.34s ease-out both;
+}
+.overlay.anim-in .card {
+  -webkit-animation: mmCardIn 0.44s cubic-bezier(0.22, 0.9, 0.3, 1) both;
+  animation: mmCardIn 0.44s cubic-bezier(0.22, 0.9, 0.3, 1) both;
+}
+
+/* ---------- 覆盖层卡片 ---------- */
+.overlay .card {
+  background: #161c2c;
+  border: 2px solid #303a5c;
+  border-radius: 18px;
+  padding: 26px 34px 30px;
+  width: 92%;
+  max-width: 660px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+}
+.title-tag {
+  display: inline-block;
+  font-size: 13px;
+  letter-spacing: 3px;
+  color: #8b93ad;
+  border: 2px solid #303a5c;
+  border-radius: 999px;
+  padding: 3px 15px;
+  margin-bottom: 10px;
+}
+.overlay h1 {
+  font-size: 46px;
+  font-weight: 700;
+  letter-spacing: 6px;
+  color: #b49cff;
+  margin: 6px 0 8px;
+}
+.overlay h2 {
+  font-size: 28px;
+  font-weight: 700;
+  color: #b49cff;
+  margin: 4px 0 12px;
+}
+.subtitle {
+  font-size: 17px;
+  color: #9fb0c8;
+  line-height: 1.7;
+  margin: 0 0 14px;
+}
+.howto {
+  max-width: 520px;
+  margin: 0 auto 16px;
+  text-align: left;
+}
+.howto p {
+  font-size: 15.5px;
+  line-height: 1.8;
+  color: #b9c6da;
+  margin: 0 0 7px;
+}
+.howto b { color: #ffd166; }
+
+.best-line { font-size: 16px; color: #9fb0c8; margin: 0 0 18px; }
+.best-line b { color: #7ee0b8; font-size: 20px; }
+
+.hint { font-size: 14px; color: #6b7a92; margin: 16px 0 0; }
+
+.big-btn {
+  background: #7c6ce8;
+  border-color: #4f42a8;
+  color: #f4f2ff;
+  font-size: 22px;
+  font-weight: 700;
+}
+.big-btn:hover, .big-btn:focus, .big-btn.sel { background: #9b8cf5; }
+
+.text-btn {
+  min-width: 130px;
+  padding: 10px 18px;
+  font-size: 17px;
+}
+
+.btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+}
+.btn-row > * { margin: 6px; }
+
+.score-box {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  margin: 6px 0 16px;
+}
+.score-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 132px;
+  margin: 6px 10px;
+  padding: 10px 22px;
+  background: #1d2436;
+  border: 2px solid #303a5c;
+  border-radius: 14px;
+}
+.score-label { font-size: 13px; color: #8b93ad; margin-bottom: 2px; }
+.score-num { font-size: 30px; font-weight: 700; color: #ffd166; }
+
+@media (max-width: 560px) {
+  .overlay .card { padding: 20px 18px 24px; }
+  .overlay h1 { font-size: 32px; letter-spacing: 3px; }
+  .overlay h2 { font-size: 22px; }
+  .hud-pill { font-size: 14px; padding: 4px 12px; }
+  #toast { width: 250px; font-size: 17px; }
+  .score-item { min-width: 112px; padding: 8px 14px; }
+  .score-num { font-size: 24px; }
+}

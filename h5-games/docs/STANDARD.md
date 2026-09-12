@@ -63,6 +63,13 @@ h5-games/
 > 事后再把目标往中心搬——场景一挤，「搬过去就撞到别的物件」，回退率会高得离谱。
 > ⑤ 关卡主题/背景要与网格对齐（如地平线放在第 2 行中心高度），
 > 否则吸附到格子中心的地面物件会「浮在半空」。
+>
+> 💡 **翻牌类动画（memory-match 实战）**：卡牌用「**scaleX 在 0~1 之间往返**」模拟翻面，
+> 起点 f=0（背面），先缩到 0 再展到 1（正面），中途 f=0.5 处换面贴图。
+> 关键细节：① 选中框画在缩放变换**之外**，翻牌时不会被压扁；
+> ② `easeInOutQuad(p)` 比线性自然；③ 翻面期间**禁用 OK**，否则会在中途错翻。
+> 另外，**预览阶段被返回键暂停**的话，恢复时要把 `peekUntil` 整体后移
+> `Date.now() - pauseStart`，否则会跳过剩余预览、白送答案。
 
 ## 5. 画布与自适应
 - 画布尺寸跟随窗口：`resize()` 里按 `window.innerWidth/innerHeight` 计算，并监听 `resize`：
@@ -115,6 +122,15 @@ h5-games/
 > （`@keyframes` 只写 `from { background-color: rgba(0,0,0,0); }`，终态自动取元素自身底色，
 > 这样带主题底色的覆盖层也能正确参与），把 `opacity` + `translateY` + `scale` 的渐入
 > 放到**子卡片**上；同时在显示覆盖层后，用 JS 主动给 `data-tv-focus` 的第一个元素 `.focus()` 兜底。
+>
+> 补充（**headless 截图调试**：Chrome `--headless=new --virtual-time-budget` **不会触发
+> `requestAnimationFrame`**，但 `setTimeout` / `Date.now()` 会被加速 —— 实测 frames=0、
+> Date.now() 推进 5000ms。
+> 如果游戏主循环挂在 rAF 上，`--virtual-time-budget` 截图永远停在「第一帧」，
+> 看起来像 bug，实际是 headless 假象。**改用真实时钟 + Chrome DevTools 协议**
+> （Node 22 内置 WebSocket 起 `--remote-debugging-port=9222` → `Page.navigate`
+> → `Runtime.evaluate` 模拟按键 → `Page.captureScreenshot`）就稳了。
+> `memory-match/test/shot.js` 是一份可复用的脚手架。
 >
 > 补充（返回键陷阱）：`history.pushState` + `popstate` 做返回键拦截时，**每次 `popstate` 触发后
 > 都要重新 `pushState` 占位**——否则用户第二次按返回就会真的离开页面/退出游戏。
