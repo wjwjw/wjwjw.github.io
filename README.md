@@ -14,6 +14,7 @@
 | 火眼金睛 · 找不同 | 程序化生成的找不同，方向键移动取景框，OK 标记差异 | [h5-games/spot-difference/index.html](h5-games/spot-difference/index.html) |
 | 记忆翻牌 · 配对 | 预览 → 扣牌 → 方向键移动高亮框，OK 翻两张相同的图案配成一对 | [h5-games/memory-match/index.html](h5-games/memory-match/index.html) |
 | 小小达人 · 认知问答 | 看图选答案：认形状 / 认颜色 / 认动物 / 比大小 / 找不同 / 数一数，不识字也能玩 | [h5-games/kids-quiz/index.html](h5-games/kids-quiz/index.html) |
+| 拼图乐园 · 滑动拼图 | 方向键把打乱的画推回原样，3×3 → 4×4，6 个手绘场景轮换 | [h5-games/puzzle-slide/index.html](h5-games/puzzle-slide/index.html) |
 | 3D 俄罗斯方块 | 基于 three.js 的 3D 俄罗斯方块，鼠标旋转视角 | [threejs-brick-game/index.html](threejs-brick-game/index.html) |
 | 网页 URL 测速工具 | 一键测速，查看网页资源加载耗时与顺序 | [url-speed-test/index.html](url-speed-test/index.html) |
 
@@ -30,6 +31,7 @@
   - `spot-difference/` — 找不同（纯 Canvas 矢量绘制，场景每局随机生成）
   - `memory-match/` — 记忆翻牌配对（预览-扣牌-翻相同图案）
   - `kids-quiz/` — 小小达人认知问答（7 种题型全图形化，低龄儿童不识字也能玩）
+  - `puzzle-slide/` — 拼图乐园滑动拼图（3×3→4×4，6 个矢量场景，打乱必定可解）
   - `docs/STANDARD.md` — TV 游戏开发规范（目录结构、输入契约、兼容性约束）
   - `start-server.bat` / `start-server.sh` — 本地开发服务器（电视通过局域网 IP 访问）
 - `threejs-brick-game/` — 3D 俄罗斯方块（three.js）

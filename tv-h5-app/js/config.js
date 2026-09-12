@@ -114,6 +114,19 @@ window.APP_CONFIG = {
       tvControls: true
     },
 
+    {
+      id: "puzzle-slide",
+      title: "拼图乐园",
+      subtitle: "滑动拼图 · 方向键把打乱的画推回原样",
+      // icon 用纯字符避免电视 emoji 变方框
+      icon: "拼",
+      folder: "puzzle-slide",
+      entry: "index.html",
+      completed: true,
+      color: "#f2a33c",
+      tvControls: true
+    },
+
     /* ↓↓↓ 后续新游戏照抄这一段，completed 先设 false 即可占位 ↓↓↓ */
     {
       id: "coming-soon",

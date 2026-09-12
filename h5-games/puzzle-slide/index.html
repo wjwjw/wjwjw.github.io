@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>拼图乐园 · 滑动拼图</title>
+  <link rel="stylesheet" href="../shared/base.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div id="app">
+  <div id="stage">
+    <canvas id="game"></canvas>
+
+    <!-- 游戏内 HUD（DOM 覆盖层，由 game.js 更新） -->
+    <div id="hud" class="hidden">
+      <div class="hud-top">
+        <div class="hud-pill">第 <b id="levelText">1</b> 关</div>
+        <div class="hud-pill"><b id="sizeText">3×3</b></div>
+        <div class="hud-pill"><b id="sceneText">小房子</b></div>
+        <div class="hud-pill">步数 <b id="moveText">0</b></div>
+        <div class="hud-pill">分数 <b id="scoreText">0</b></div>
+        <div class="hud-pill">最高 <b id="bestText">0</b></div>
+      </div>
+      <div id="timeWrap"><div id="timeFill"></div></div>
+    </div>
+  </div>
+
+  <!-- 开始界面 -->
+  <div id="startScreen" class="overlay">
+    <div class="card">
+      <div class="title-tag">SLIDE PUZZLE</div>
+      <h1>拼图乐园</h1>
+      <p class="subtitle">把打乱的画推回原样 · 遥控器就能玩</p>
+      <div class="howto">
+        <p>一整张画被切成方块打乱了，用<b>方向键 / WASD</b> 把方块推回原位。</p>
+        <p>按的方向就是<b>方块滑动的方向</b>——按「右」，空格左边那块就往右滑。</p>
+        <p>右上角常驻一张<b>目标图</b>可以随时对照；忘了就按 <b>OK</b> 再看一眼大图。</p>
+        <p><b>归位的方块会描上绿边</b>，能动的方向会描上黄边。</p>
+      </div>
+      <p class="type-list">
+        <span>小房子</span><span>小猫咪</span><span>向日葵</span>
+        <span>小汽车</span><span>小鱼儿</span><span>小熊</span>
+      </p>
+      <p class="best-line">历史最高：<b id="startBest">0</b></p>
+      <button id="btnStart" class="big-btn tv-focus" data-tv-focus autofocus>开始拼图</button>
+      <p class="hint">方向键推动方块 · OK 看原图 · 返回键暂停</p>
+    </div>
+  </div>
+
+  <!-- 暂停 -->
+  <div id="pauseScreen" class="overlay hidden">
+    <div class="card">
+      <h2>暂停中</h2>
+      <p id="pauseStat" class="subtitle"></p>
+      <div class="btn-row">
+        <button id="btnResume" class="big-btn tv-focus" data-tv-focus>继续拼图</button>
+        <button id="btnRestart" class="text-btn tv-focus" data-tv-focus>换一张</button>
+        <button id="btnMute" class="text-btn tv-focus" data-tv-focus>声音</button>
+        <button id="btnQuit" class="text-btn tv-focus" data-tv-focus>返回标题</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 过关 -->
+  <div id="clearScreen" class="overlay hidden">
+    <div class="card">
+      <div class="title-tag">PUZZLE SOLVED</div>
+      <h2 id="clearTitle">拼好啦！</h2>
+      <div class="score-box">
+        <div class="score-item"><span class="score-label">用了步数</span><span id="clearMoves" class="score-num">0</span></div>
+        <div class="score-item"><span class="score-label">时间奖励</span><span id="clearBonus" class="score-num">0</span></div>
+        <div class="score-item"><span class="score-label">本局分数</span><span id="clearScore" class="score-num">0</span></div>
+      </div>
+      <p id="clearTip" class="subtitle"></p>
+      <div class="btn-row">
+        <button id="btnNext" class="big-btn tv-focus" data-tv-focus>下一关</button>
+        <button id="btnClearQuit" class="text-btn tv-focus" data-tv-focus>返回标题</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 结束 -->
+  <div id="overScreen" class="overlay hidden">
+    <div class="card">
+      <div class="title-tag">TIME UP</div>
+      <h2>时间到啦</h2>
+      <div class="score-box">
+        <div class="score-item"><span class="score-label">走了步数</span><span id="overMoves" class="score-num">0</span></div>
+        <div class="score-item"><span class="score-label">本局分数</span><span id="overScore" class="score-num">0</span></div>
+        <div class="score-item"><span class="score-label">历史最高</span><span id="overBest" class="score-num">0</span></div>
+      </div>
+      <p id="overTip" class="subtitle"></p>
+      <div class="btn-row">
+        <button id="btnReplay" class="big-btn tv-focus" data-tv-focus>再来一次</button>
+        <button id="btnOverQuit" class="text-btn tv-focus" data-tv-focus>返回标题</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 经典脚本（兼容 Android 6 WebView，不用 ES module） -->
+<script src="../shared/input.js"></script>
+<!-- TV 启动器兜底：MainActivity.onKeyDown 会 evaluateJavascript("TVLauncher.handleBack()")，
+     把遥控 BACK 键转发到 TVInput 的 back 事件；没有这个全局对象时 BACK 永远到不了 JS。 -->
+<script>window.TVLauncher=window.TVLauncher||{handleBack:function(){try{window.TVInput&&window.TVInput.trigger('back')}catch(e){}}};</script>
+<script src="../shared/nav.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/art.js"></script>
+<script src="js/puzzle.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
