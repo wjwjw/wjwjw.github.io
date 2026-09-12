@@ -101,6 +101,19 @@ window.APP_CONFIG = {
       tvControls: true
     },
 
+    {
+      id: "kids-quiz",
+      title: "小小达人",
+      subtitle: "认知问答 · 看图选答案，不识字也能玩",
+      // icon 用纯字符避免电视 emoji 变方框
+      icon: "问",
+      folder: "kids-quiz",
+      entry: "index.html",
+      completed: true,
+      color: "#2ab7b0",
+      tvControls: true
+    },
+
     /* ↓↓↓ 后续新游戏照抄这一段，completed 先设 false 即可占位 ↓↓↓ */
     {
       id: "coming-soon",
