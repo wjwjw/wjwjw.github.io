@@ -127,6 +127,18 @@ window.APP_CONFIG = {
       tvControls: true
     },
 
+    {
+      id: "snake",
+      title: "贪吃蛇",
+      subtitle: "吃苹果长大 · 方向键转弯，撞墙会穿过去",
+      icon: "蛇",
+      folder: "snake",
+      entry: "index.html",
+      completed: true,
+      color: "#3fa96b",
+      tvControls: true
+    },
+
     /* ↓↓↓ 后续新游戏照抄这一段，completed 先设 false 即可占位 ↓↓↓ */
     {
       id: "coming-soon",
