@@ -34,11 +34,13 @@ const DRAW_PRIMS = ['arc', 'ellipse', 'fillRect', 'strokeRect', 'fill', 'stroke'
 
 function makeCtx() {
   const c = {
-    save() {}, restore() {}, translate() {}, scale() {}, setTransform() {},
+    save() {}, restore() {}, translate() {}, scale() {}, rotate() {}, setTransform() {},
     clearRect() {},
     beginPath() {}, closePath() {}, moveTo() {}, lineTo() {},
     setLineDash() {},
     createLinearGradient() { return { addColorStop() {} }; },
+    createRadialGradient() { return { addColorStop() {} }; },
+    strokeText() {},
     measureText() { return { width: 10 }; }
   };
   DRAW_PRIMS.forEach(k => { c[k] = function () {}; });
@@ -101,7 +103,7 @@ const sandbox = {
 sandbox.window = sandbox;
 vm.createContext(sandbox);
 
-['../shared/input.js', '../shared/nav.js', 'js/audio.js', 'js/art.js', 'js/puzzle.js', 'js/game.js']
+['../shared/input.js', '../shared/nav.js', '../shared/fx.js', 'js/audio.js', 'js/art.js', 'js/puzzle.js', 'js/game.js']
   .forEach(rel => {
     const file = path.join(ROOT, rel);
     vm.runInContext(fs.readFileSync(file, 'utf8'), sandbox, { filename: file });

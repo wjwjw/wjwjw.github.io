@@ -33,6 +33,12 @@
 
   var audio = new AudioManager();
 
+  // TA 特效库（shared/fx.js）：粒子 / 彩纸 / 环境气泡 / 暗角
+  var fx = FX.create();
+  var bgCache = null;      // 背景预渲染（渐变 + 星屑），每帧只 drawImage
+  var backCache = null;    // 牌背预渲染，按当前卡片尺寸生成
+  var vigCache = null;     // 暗角
+
   var best = 0;
   var score = 0;
   var level = 1;
@@ -184,6 +190,8 @@
     layout.y0 = topPad + (boardH - totalH) / 2;
     layout.boardBottom = layout.y0 + totalH;
     layout.bannerY = layout.boardBottom + 22;  // 文本基线，贴在棋盘下面
+
+    renderCardBack();   // 卡片尺寸随关卡变，牌背缓存要跟着重建
   }
 
   function resize() {
@@ -197,6 +205,137 @@
     canvas.style.height = viewH + 'px';
 
     computeLayout();
+    prerenderStatics();
+
+    // 环境气泡：几粒缓慢上漂的柔光，让夜空背景「活」起来（微粒是运动的，resize 重建不显跳）
+    fx.setAmbient({
+      count: 12, w: viewW, h: viewH,
+      colors: ['#7fb8ff', '#b7d0ff', '#ffffff'],
+      glow: 30, size: [4, 11], speed: [6, 16],
+      alpha: [0.05, 0.15], core: 0.5
+    });
+  }
+
+  // ============================================================
+  //  TA：预渲染缓存（背景 / 牌背 / 暗角）
+  //  原实现每帧 createLinearGradient + 手画星屑，老设备上是无谓的 GC 压力；
+  //  预渲染后每帧一次 drawImage，还能顺手把背景画得更讲究。
+  // ============================================================
+  function prerenderStatics() {
+    bgCache = document.createElement('canvas');
+    bgCache.width = Math.max(1, Math.round(viewW * dpr));
+    bgCache.height = Math.max(1, Math.round(viewH * dpr));
+    var g = bgCache.getContext('2d');
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    var grad = g.createLinearGradient(0, 0, 0, viewH);
+    grad.addColorStop(0, '#17253f');
+    grad.addColorStop(0.55, '#101827');
+    grad.addColorStop(1, '#0a0f18');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, viewW, viewH);
+
+    // 底部一抹深蓝柔光，避免下半屏死黑；顶部一点冷光呼应 HUD
+    var glow = FX.glowSprite('#2c4a86', 280, 0.5);
+    g.globalAlpha = 0.4;
+    g.drawImage(glow, viewW * 0.5 - 280, viewH - 300, 560, 560);
+    g.drawImage(glow, viewW * 0.08 - 200, -220, 400, 400);
+    g.globalAlpha = 1;
+
+    // 星屑：固定种子 LCG，resize 重绘位置不跳（同 snake 草地点缀的做法）
+    var rnd = FX.lcg(20260912);
+    for (var i = 0; i < 46; i++) {
+      var x = rnd() * viewW, y = rnd() * viewH * 0.7;
+      var r = 0.7 + rnd() * 1.7;
+      g.globalAlpha = 0.05 + rnd() * 0.10;
+      g.fillStyle = (i % 5 === 0) ? '#bcd4ff' : '#ffffff';
+      g.beginPath();
+      g.arc(x, y, r, 0, Math.PI * 2);
+      g.fill();
+    }
+    g.globalAlpha = 1;
+
+    vigCache = FX.vignette(viewW, viewH, { strength: 0.36 });
+  }
+
+  /* 牌背画法（预渲染 + 兜底现画共用）：
+   * 渐变底 + 外框 + 内衬线 + 四角星点 + 中央星徽（带柔光）+ 顶部斜向高光。
+   * 比原来的「纯色块 + 菱形」多五层细节，但只画一次。 */
+  function paintCardBack(g, x, y, w, h, radius) {
+    var base = g.createLinearGradient(0, y, 0, y + h);
+    base.addColorStop(0, '#3d5588');
+    base.addColorStop(0.5, '#2e4069');
+    base.addColorStop(1, '#25345a');
+    Faces.roundRect(g, x, y, w, h, radius);
+    g.fillStyle = base;
+    g.fill();
+
+    // 顶部斜向高光：像一层覆膜反光，卡片立刻有了「材质」
+    g.save();
+    Faces.roundRect(g, x, y, w, h, radius);
+    g.clip();
+    var sheen = g.createLinearGradient(x, y, x + w * 0.7, y + h * 0.8);
+    sheen.addColorStop(0, 'rgba(255,255,255,0.14)');
+    sheen.addColorStop(0.45, 'rgba(255,255,255,0.03)');
+    sheen.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = sheen;
+    g.fillRect(x, y, w, h);
+    g.restore();
+
+    // 外框 + 内衬线
+    Faces.roundRect(g, x + 1.5, y + 1.5, w - 3, h - 3, Math.max(2, radius - 1.5));
+    g.strokeStyle = 'rgba(158,190,240,0.75)';
+    g.lineWidth = 2;
+    g.stroke();
+    var inset = Math.max(5, Math.min(w, h) * 0.075);
+    Faces.roundRect(g, x + inset, y + inset, w - inset * 2, h - inset * 2,
+                    Math.max(3, radius - inset * 0.6));
+    g.strokeStyle = 'rgba(150,180,230,0.30)';
+    g.lineWidth = 1.5;
+    g.stroke();
+
+    // 四角小星点
+    var cd = Math.max(2.5, Math.min(w, h) * 0.030);
+    var cs = Math.max(5, Math.min(w, h) * 0.075);
+    g.fillStyle = 'rgba(173,200,244,0.55)';
+    var corners = [
+      [x + inset + cs, y + inset + cs],
+      [x + w - inset - cs, y + inset + cs],
+      [x + inset + cs, y + h - inset - cs],
+      [x + w - inset - cs, y + h - inset - cs]
+    ];
+    for (var i = 0; i < corners.length; i++) {
+      FX.pathStar(g, corners[i][0], corners[i][1], cd, cd * 0.45, Math.PI / 4);
+      g.fill();
+    }
+
+    // 中央星徽：柔光 + 双层星
+    var cx = x + w / 2, cy = y + h / 2;
+    var R = Math.min(w, h) * 0.185;
+    var spr = FX.glowSprite('#7fb8ff', R * 2.1, 0.35);
+    g.globalAlpha = 0.55;
+    g.drawImage(spr, cx - R * 2.1, cy - R * 2.1, R * 4.2, R * 4.2);
+    g.globalAlpha = 1;
+    FX.pathStar(g, cx, cy, R, R * 0.47);
+    g.fillStyle = '#6f8fc9';
+    g.fill();
+    g.strokeStyle = 'rgba(219,231,255,0.85)';
+    g.lineWidth = Math.max(1.5, R * 0.10);
+    g.stroke();
+    FX.pathStar(g, cx, cy, R * 0.52, R * 0.24);
+    g.fillStyle = '#a9c4f2';
+    g.fill();
+  }
+
+  function renderCardBack() {
+    if (!layout.cw || !layout.ch) { backCache = null; return; }
+    backCache = document.createElement('canvas');
+    backCache.width = Math.max(2, Math.round(layout.cw * dpr));
+    backCache.height = Math.max(2, Math.round(layout.ch * dpr));
+    var g = backCache.getContext('2d');
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    paintCardBack(g, 0, 0, layout.cw, layout.ch,
+                  Math.max(6, Math.min(layout.cw, layout.ch) * 0.12));
   }
 
   function cardPos(i) {
@@ -324,6 +463,7 @@
     lastTickSec = -1;
     timeTotal = cfg.time;
     timeLeft = timeTotal;
+    fx.clear();
 
     cursor.c = Math.floor(cols / 2);
     cursor.r = Math.floor(rows / 2);
@@ -419,6 +559,7 @@
     cards = [];
     pending = null;
     firstPick = -1;
+    fx.clear();                        // 清掉上一局的彩纸 / 粒子
     el.startBest.textContent = best;
     show('startScreen');
     focusFirst('startScreen');
@@ -490,15 +631,34 @@
       score += gain;
       timeLeft = Math.min(timeTotal, timeLeft + 2);   // 配对奖励 2 秒
 
+      // TA：配对爆点 —— 图案色的星粒从两张牌喷出 + 同色扩散环 + 飘分
+      var pa = cardPos(a), pb = cardPos(b);
+      var acx = pa.x + layout.cw / 2, acy = pa.y + layout.ch / 2;
+      var bcx = pb.x + layout.cw / 2, bcy = pb.y + layout.ch / 2;
+      var faceColor = Faces.list[cards[a].faceId].color;
+      var burstOpts = {
+        count: combo > 1 ? 18 : 12,
+        colors: [faceColor, '#ffd166', '#ffffff'],
+        shapes: ['star', 'dot'],
+        speed: [70, 220], size: [2.5, 6.5], life: [0.5, 0.95], g: 260
+      };
+      fx.burst(acx, acy, burstOpts);
+      fx.burst(bcx, bcy, burstOpts);
+      fx.ring(acx, acy, { color: faceColor, r1: layout.cw * 0.5, lw: 4 });
+      fx.ring(bcx, bcy, { color: faceColor, r1: layout.cw * 0.5, lw: 4 });
+      fx.float((acx + bcx) / 2, Math.min(acy, bcy) - layout.ch * 0.18,
+               '+' + gain, { color: '#ffd166', size: Math.max(18, layout.ch * 0.24) });
+
       audio.sfx('match');
       toast('配对成功  +' + gain + (combo > 1 ? '   连击 x' + combo : ''), 'good');
       updateHud();
       syncTimeBar(true);
 
       if (matchedPairs >= pairCount) {
-        // 全部配对：不要「啪」地弹结算卡片，先让最后两张的绿勾闪一下。
-        // 用 pending.finish 同时达到两个目的：锁住输入 + 冻结计时。
-        pending = { a: -1, b: -1, until: now + 700, finish: true };
+        // 全部配对：不要「啪」地弹结算卡片，先来一段彩纸雨让孩子爽一下。
+        // 用 pending.finish 同时达到三个目的：锁住输入 + 冻结计时 + 拖 1.6s 再弹结算。
+        fx.confetti({ count: 90, x0: 0, x1: viewW, w: viewW });
+        pending = { a: -1, b: -1, until: now + 1600, finish: true };
       }
     } else {
       combo = 0;
@@ -593,46 +753,17 @@
   //  渲染
   // ============================================================
   function drawBackground() {
-    var g = ctx.createLinearGradient(0, 0, 0, viewH);
-    g.addColorStop(0, '#14203a');
-    g.addColorStop(0.55, '#101827');
-    g.addColorStop(1, '#0a0f18');
-    ctx.fillStyle = g;
+    if (bgCache) { ctx.drawImage(bgCache, 0, 0, viewW, viewH); return; }
+    ctx.fillStyle = '#0a0f18';
     ctx.fillRect(0, 0, viewW, viewH);
-
-    // 几点极淡的星屑做背景纹理（纯装饰）
-    ctx.fillStyle = 'rgba(255,255,255,0.05)';
-    var pts = [[0.06, 0.10], [0.17, 0.24], [0.29, 0.07], [0.41, 0.19], [0.55, 0.11],
-               [0.68, 0.26], [0.79, 0.06], [0.91, 0.21], [0.13, 0.36], [0.86, 0.38],
-               [0.35, 0.33], [0.62, 0.35]];
-    for (var i = 0; i < pts.length; i++) {
-      ctx.beginPath();
-      ctx.arc(pts[i][0] * viewW, pts[i][1] * viewH, 2.6, 0, Math.PI * 2);
-      ctx.fill();
-    }
   }
 
   function drawCardBack(x, y, w, h, radius) {
-    Faces.roundRect(ctx, x, y, w, h, radius);
-    ctx.fillStyle = '#2C3E68';
-    ctx.fill();
-
-    Faces.roundRect(ctx, x + 4, y + 4, w - 8, h - 8, Math.max(2, radius - 3));
-    ctx.strokeStyle = 'rgba(120,152,205,0.65)';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    // 中央菱形标记
-    var cx = x + w / 2, cy = y + h / 2;
-    var d = Math.min(w, h) * 0.19;
-    ctx.fillStyle = '#5C79B0';
-    ctx.beginPath();
-    ctx.moveTo(cx, cy - d);
-    ctx.lineTo(cx + d, cy);
-    ctx.lineTo(cx, cy + d);
-    ctx.lineTo(cx - d, cy);
-    ctx.closePath();
-    ctx.fill();
+    if (backCache && Math.abs(w - layout.cw) < 0.5 && Math.abs(h - layout.ch) < 0.5) {
+      ctx.drawImage(backCache, x, y, w, h);
+      return;
+    }
+    paintCardBack(ctx, x, y, w, h, radius);   // 尺寸对不上时现画兜底
   }
 
   function drawCardFace(card, x, y, w, h, radius) {
@@ -689,6 +820,13 @@
       var f = flipOf(card, now);
       var sx = Math.abs(Math.cos(Math.PI * f));
       if (sx < 0.03) sx = 0.03;
+
+      // 卡片投影：一次 fill 换来「浮在桌面上」的层次；随翻面收窄，不会穿帮
+      ctx.globalAlpha = 0.30 * (0.4 + 0.6 * sx);
+      Faces.roundRect(ctx, p.x - 1, p.y + 5, layout.cw, layout.ch, radius);
+      ctx.fillStyle = '#04070d';
+      ctx.fill();
+      ctx.globalAlpha = 1;
 
       var sel = (state === STATE.PLAY && cursor.c === (i % cols) &&
                  cursor.r === Math.floor(i / cols));
@@ -756,11 +894,15 @@
   function render(now) {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     drawBackground();
+    fx.drawBack(ctx);                        // 环境气泡：卡片之下
 
-    if (!cards.length) return;
+    if (cards.length) {
+      drawBoard(now);
+      if (state === STATE.PEEK) drawPeekBanner(now);
+    }
 
-    drawBoard(now);
-    if (state === STATE.PEEK) drawPeekBanner(now);
+    fx.drawFront(ctx);                       // 粒子 / 彩纸 / 飘字：最上层
+    if (vigCache) ctx.drawImage(vigCache, 0, 0, viewW, viewH);
   }
 
   // ============================================================
@@ -775,6 +917,8 @@
     if (dt > 0.1) dt = 0.1;      // 切后台回来时不要一口气扣掉大量时间
 
     var now = Date.now();
+
+    fx.update(dt);
 
     if (state === STATE.PEEK) updatePeek(now);
     if (pending) updatePending(now);

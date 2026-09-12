@@ -84,6 +84,7 @@
      把遥控 BACK 键转发到 TVInput 的 back 事件；没有这个全局对象时 BACK 永远到不了 JS。 -->
 <script>window.TVLauncher=window.TVLauncher||{handleBack:function(){try{window.TVInput&&window.TVInput.trigger('back')}catch(e){}}};</script>
 <script src="../shared/nav.js"></script>
+<script src="../shared/fx.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/game.js"></script>
 </body>

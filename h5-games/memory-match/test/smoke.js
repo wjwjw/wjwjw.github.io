@@ -35,10 +35,12 @@ const DRAW_PRIMS = ['arc', 'ellipse', 'fillRect', 'strokeRect', 'fill', 'stroke'
 
 function makeCtx() {
   const c = {
-    save() {}, restore() {}, translate() {}, scale() {}, setTransform() {},
+    save() {}, restore() {}, translate() {}, scale() {}, rotate() {}, setTransform() {},
     beginPath() {}, closePath() {}, moveTo() {}, lineTo() {},
     drawImage() {}, setLineDash() {},
     createLinearGradient() { return { addColorStop() {} }; },
+    createRadialGradient() { return { addColorStop() {} }; },
+    strokeText() {},
     measureText() { return { width: 10 }; }
   };
   DRAW_PRIMS.forEach(k => { c[k] = function () {}; });
@@ -73,6 +75,8 @@ els.game = canvasEl;
 const documentStub = {
   readyState: 'loading',
   getElementById(id) { if (!els[id]) els[id] = makeEl(id); return els[id]; },
+  // fx.js 预渲染离屏 canvas（光斑 / 暗角 / 牌背）用
+  createElement() { return { width: 0, height: 0, getContext() { return makeCtx(); } }; },
   addEventListener() {},
   querySelectorAll() { return []; }
 };
@@ -98,7 +102,7 @@ const sandbox = {
 sandbox.window = sandbox;
 vm.createContext(sandbox);
 
-['../shared/input.js', '../shared/nav.js', 'js/audio.js', 'js/faces.js', 'js/game.js']
+['../shared/input.js', '../shared/nav.js', '../shared/fx.js', 'js/audio.js', 'js/faces.js', 'js/game.js']
   .forEach(rel => {
     const file = path.join(ROOT, rel);
     vm.runInContext(fs.readFileSync(file, 'utf8'), sandbox, { filename: file });

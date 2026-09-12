@@ -44,6 +44,11 @@
   var viewW = 0, viewH = 0, dpr = 1;
   var layout = { w: 0, h: 0, top: 0, leftX: 0, rightX: 0 };
 
+  // TA 特效库（shared/fx.js）：粒子 / 彩纸 / 震屏 / 暗角
+  var fx = FX.create();
+  var bgCache = null;      // 背景预渲染（渐变 + 柔光）
+  var vigCache = null;     // 暗角
+
   // 常用 DOM 引用一次性取好
   var el = {};
   ['hud', 'levelText', 'foundText', 'totalText', 'scoreText', 'bestText', 'comboText', 'comboPill',
@@ -98,6 +103,31 @@
     layout.rightX = sidePad + availW / 2 + gap + (availW / 2 - panelW) / 2;
 
     if (levelData) Scenes.prepare(levelData, panelW, panelH, dpr);
+    prerenderStatics();
+  }
+
+  // TA：背景预渲染。原来每帧一块死黑，两幅画的边缘「切」得很硬；
+  // 加一层渐变 + 中缝柔光 + 暗角之后，画面有了聚光灯下的观察台感。
+  function prerenderStatics() {
+    bgCache = document.createElement('canvas');
+    bgCache.width = Math.max(1, Math.round(viewW * dpr));
+    bgCache.height = Math.max(1, Math.round(viewH * dpr));
+    var g = bgCache.getContext('2d');
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    var grad = g.createLinearGradient(0, 0, 0, viewH);
+    grad.addColorStop(0, '#182031');
+    grad.addColorStop(0.6, '#111623');
+    grad.addColorStop(1, '#0a0c11');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, viewW, viewH);
+
+    var glow = FX.glowSprite('#2f4a7a', 300, 0.45);
+    g.globalAlpha = 0.30;
+    g.drawImage(glow, viewW * 0.5 - 300, viewH * 0.42 - 300, 600, 600);
+    g.globalAlpha = 1;
+
+    vigCache = FX.vignette(viewW, viewH, { strength: 0.30 });
   }
 
   // ============================================================
@@ -205,6 +235,7 @@
     lastTickSec = -1;
     resolveT = 0;
     lastFoundPos = null;
+    fx.clear();                     // 清掉上一关残留的彩纸 / 粒子
     timeTotal = timeOf(lv);
     timeLeft = timeTotal;
     cursor.c = Math.floor(Scenes.GRID_COLS / 2);
@@ -304,6 +335,7 @@
     hide('hud');
     levelData = null;
     lastFoundPos = null;
+    fx.clear();
     Scenes.invalidate();
     el.startBest.textContent = best;
     show('startScreen');
@@ -390,6 +422,27 @@
     updateHud();
     syncTimeBar(true);
 
+    // TA：找对是全游戏唯一的正反馈，原来只有一行 toast，太安静了。
+    // 绿色星粒 + 扩散环 **左右两幅同时放**（与 foundMarks 的画法一致），
+    // 只放一边会显得画面「歪」；连击越高喷得越猛。
+    var moved = (d.kind === 'move');
+    var lx = layout.leftX + d.x * layout.w;
+    var ly = layout.top + d.y * layout.h;
+    var rx = layout.rightX + (moved ? d.x + d.mx : d.x) * layout.w;
+    var ry = layout.top + (moved ? d.y + d.my : d.y) * layout.h;
+    var popOpts = {
+      count: combo > 1 ? 16 : 11,
+      colors: ['#6ef0b8', '#ffd166', '#ffffff'],
+      shapes: ['star', 'dot'],
+      speed: [70, 210], size: [2.5, 6], life: [0.5, 0.9], g: 280
+    };
+    fx.burst(lx, ly, popOpts);
+    fx.burst(rx, ry, popOpts);
+    fx.ring(lx, ly, { color: '#6ef0b8', r1: layout.w * 0.14, lw: 4 });
+    fx.ring(rx, ry, { color: '#6ef0b8', r1: layout.w * 0.14, lw: 4 });
+    fx.float(lx, ly - layout.h * 0.08, '+' + gain,
+             { color: '#ffd166', size: Math.max(18, layout.h * 0.10) });
+
     if (foundCount >= levelData.diffCount) {
       // 最后一处也找到了 —— 不要「啪」地弹结算卡片。
       // 先进入 RESOLVE 过渡态：计时冻结、输入锁住，画面上铺一层半透明过关光晕
@@ -399,6 +452,8 @@
       lastFoundPos = { x: d.x, y: d.y };
       audio.stopBGM();
       audio.sfx('levelclear');
+      // TA：绿色光晕之外再撒一轮彩纸 —— 找不同是「盯到眼酸」的玩法，收尾该热闹一点
+      fx.confetti({ count: 70, x0: 0, x1: viewW, w: viewW });
       clearTimer = setTimeout(function () { clearTimer = null; levelClear(); }, CLEAR_DELAY);
     }
   }
@@ -412,6 +467,16 @@
     toast('- 30 分   - 3 秒', 'bad');
     updateHud();
     syncTimeBar(true);
+
+    // TA：找错要「有代价感」，但不能吓到孩子 —— 一记轻震屏 + 取景框位置冒一小撮红灰，
+    // 比单纯扣分更能让人记住「这里没有」。震的是两幅画，不是整屏。
+    fx.shake(Math.max(4, layout.w * 0.012), 0.28);
+    var mx = layout.leftX + (cursor.c + 0.5) / Scenes.GRID_COLS * layout.w;
+    var my = layout.top + (cursor.r + 0.5) / Scenes.GRID_ROWS * layout.h;
+    fx.burst(mx, my, {
+      count: 8, colors: ['#e5484d', '#8a93a8'], shapes: ['dot'],
+      speed: [40, 140], size: [2, 4.5], life: [0.3, 0.55], g: 340
+    });
 
     if (timeLeft <= 0) gameOver();
   }
@@ -549,24 +614,34 @@
     ctx.fillText('全部找到！', viewW / 2, viewH / 2);
   }
 
-  function render(now) {
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  function drawBackground() {
+    if (bgCache) { ctx.drawImage(bgCache, 0, 0, viewW, viewH); return; }
     ctx.fillStyle = '#0e1116';
     ctx.fillRect(0, 0, viewW, viewH);
+  }
 
-    if (!levelData) return;
+  function render(now) {
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    drawBackground();
 
-    var view = {
-      marks: foundMarks(),
-      hint: hintPos(),
-      cursor: (state === STATE.PLAY) ? cursorRect() : null
-    };
+    if (levelData) {
+      var view = {
+        marks: foundMarks(),
+        hint: hintPos(),
+        cursor: (state === STATE.PLAY) ? cursorRect() : null
+      };
 
-    Scenes.drawPanel(ctx, layout.leftX, layout.top, layout.w, layout.h, 'left', view, now);
-    Scenes.drawPanel(ctx, layout.rightX, layout.top, layout.w, layout.h, 'right', view, now);
-    paintLabels();
+      fx.applyShake(ctx);        // 找错震屏只晃两幅画，HUD 与暗角不跟着抖
+      Scenes.drawPanel(ctx, layout.leftX, layout.top, layout.w, layout.h, 'left', view, now);
+      Scenes.drawPanel(ctx, layout.rightX, layout.top, layout.w, layout.h, 'right', view, now);
+      paintLabels();
+      fx.undoShake(ctx);
 
-    if (state === STATE.RESOLVE) paintClearFlash();
+      if (state === STATE.RESOLVE) paintClearFlash();
+    }
+
+    fx.drawFront(ctx);           // 粒子 / 彩纸 / 飘分：最上层
+    if (vigCache) ctx.drawImage(vigCache, 0, 0, viewW, viewH);
   }
 
   // ============================================================
@@ -579,6 +654,8 @@
     lastT = t;
     if (dt < 0) dt = 0;
     if (dt > 0.1) dt = 0.1;      // 切后台回来时不要一口气扣掉大量时间
+
+    fx.update(dt);
 
     if (state === STATE.PLAY) {
       timeLeft -= dt;
@@ -658,4 +735,38 @@
   resize();
   gotoStart();
   requestAnimationFrame(loop);
+
+  // 供测试驱动（与 kids-quiz / puzzle-slide 一致）：暴露只读状态，
+  // 便于冒烟测试验证「接了 fx.js 之后流程没崩」。
+  window.__spot = {
+    get state() { return state; },
+    get level() { return level; },
+    get foundCount() { return foundCount; },
+    get score() { return score; },
+    get cursor() { return { c: cursor.c, r: cursor.r }; },
+    get diffCount() { return levelData ? levelData.diffCount : 0; },
+    get diffs() { return levelData ? levelData.diffs : []; },
+    layout: function () {
+      return { w: layout.w, h: layout.h, top: layout.top,
+               leftX: layout.leftX, rightX: layout.rightX, vw: viewW, vh: viewH };
+    },
+    setCursor: function (c, r) {
+      if (state !== STATE.PLAY) return false;
+      cursor.c = Math.max(0, Math.min(Scenes.GRID_COLS - 1, c | 0));
+      cursor.r = Math.max(0, Math.min(Scenes.GRID_ROWS - 1, r | 0));
+      return true;
+    },
+    // 把取景框挪到某处差异上，再按 OK —— 测「找对」的特效分支
+    aimAt: function (i) {
+      if (!levelData || !levelData.diffs[i] || state !== STATE.PLAY) return false;
+      var d = levelData.diffs[i];
+      cursor.c = Math.round(d.x * Scenes.GRID_COLS - 0.5);
+      cursor.r = Math.round(d.y * Scenes.GRID_ROWS - 0.5);
+      if (cursor.c < 0) cursor.c = 0;
+      if (cursor.c > Scenes.GRID_COLS - 1) cursor.c = Scenes.GRID_COLS - 1;
+      if (cursor.r < 0) cursor.r = 0;
+      if (cursor.r > Scenes.GRID_ROWS - 1) cursor.r = Scenes.GRID_ROWS - 1;
+      return true;
+    }
+  };
 })();

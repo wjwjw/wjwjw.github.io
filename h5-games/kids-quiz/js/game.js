@@ -34,6 +34,11 @@
 
   var audio = new AudioManager();
 
+  // TA 特效库（shared/fx.js）：彩纸 / 星粒 / 震屏 / 环境微粒 / 暗角
+  var fx = FX.create();
+  var bgCache = null;      // 背景预渲染（渐变 + 星屑 + 柔光）
+  var vigCache = null;     // 暗角
+
   var best = 0;
   var score = 0;
   var level = 1;
@@ -136,6 +141,50 @@
     canvas.style.height = viewH + 'px';
 
     computeLayout();
+    prerenderStatics();
+
+    // 环境微粒：几粒极淡的暖光缓慢上漂，衬托「教室夜晚」的安静氛围
+    fx.setAmbient({
+      count: 10, w: viewW, h: viewH,
+      colors: ['#ffd166', '#ffffff'],
+      glow: 26, size: [3, 8], speed: [5, 13],
+      alpha: [0.04, 0.12], core: 0.5
+    });
+  }
+
+  // TA：背景预渲染。原实现每帧建渐变 + 手画星屑；预渲染后每帧一次 drawImage，
+  // 还能加底部柔光让画面不「沉底」。
+  function prerenderStatics() {
+    bgCache = document.createElement('canvas');
+    bgCache.width = Math.max(1, Math.round(viewW * dpr));
+    bgCache.height = Math.max(1, Math.round(viewH * dpr));
+    var g = bgCache.getContext('2d');
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    var grad = g.createLinearGradient(0, 0, 0, viewH);
+    grad.addColorStop(0, '#182742');
+    grad.addColorStop(0.55, '#101828');
+    grad.addColorStop(1, '#0a0f18');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, viewW, viewH);
+
+    var glow = FX.glowSprite('#2c4a86', 280, 0.5);
+    g.globalAlpha = 0.38;
+    g.drawImage(glow, viewW * 0.5 - 280, viewH - 300, 560, 560);
+    g.globalAlpha = 1;
+
+    // 星屑：固定种子 LCG，resize 重绘位置不跳
+    var rnd = FX.lcg(20260912);
+    for (var i = 0; i < 40; i++) {
+      g.globalAlpha = 0.05 + rnd() * 0.09;
+      g.fillStyle = '#ffffff';
+      g.beginPath();
+      g.arc(rnd() * viewW, rnd() * viewH * 0.65, 0.7 + rnd() * 1.6, 0, Math.PI * 2);
+      g.fill();
+    }
+    g.globalAlpha = 1;
+
+    vigCache = FX.vignette(viewW, viewH, { strength: 0.34 });
   }
 
   function optPos(i) {
@@ -234,6 +283,7 @@
     timeTotal = timeOf(lv);
     timeLeft = timeTotal;
     lastTickSec = -1;
+    fx.clear();
 
     state = STATE.ASK;
     hideScreens();
@@ -280,6 +330,26 @@
     if (state !== STATE.ASK || !question) return;
     chosen = i;
     wasRight = (i === question.answer);
+
+    // TA：判定的体感反馈 —— 答对从选项喷彩纸星粒，答错震屏一下。
+    // 孩子先「感觉到」结果，再去读 toast 文字。
+    var op = optPos(i);
+    var ocx = op.x + layout.ow / 2, ocy = op.y + layout.oh / 2;
+    if (wasRight) {
+      fx.burst(ocx, ocy, {
+        count: combo > 2 ? 26 : 16,
+        colors: ['#3ED598', '#ffd166', '#7fb8ff', '#ffffff'],
+        shapes: ['star', 'rect', 'dot'],
+        speed: [90, 260], size: [3, 7], life: [0.55, 1.0], g: 300
+      });
+      fx.ring(ocx, ocy, { color: '#3ED598', r1: layout.ow * 0.5, lw: 4 });
+    } else {
+      fx.shake(Math.min(9, 5 + layout.ow * 0.02), 0.3);
+      fx.burst(ocx, ocy, {
+        count: 8, colors: ['#E5484D'],
+        shapes: ['dot'], speed: [50, 150], size: [2.5, 5], life: [0.35, 0.6], g: 420
+      });
+    }
 
     if (wasRight) {
       combo++;
@@ -351,6 +421,7 @@
     hide('hud');
     question = null;
     chosen = -1;
+    fx.clear();
     el.startBest.textContent = best;
     show('startScreen');
     focusFirst('startScreen');
@@ -426,22 +497,9 @@
   //  渲染
   // ============================================================
   function drawBackground() {
-    var g = ctx.createLinearGradient(0, 0, 0, viewH);
-    g.addColorStop(0, '#151f38');
-    g.addColorStop(0.55, '#101828');
-    g.addColorStop(1, '#0a0f18');
-    ctx.fillStyle = g;
+    if (bgCache) { ctx.drawImage(bgCache, 0, 0, viewW, viewH); return; }
+    ctx.fillStyle = '#0a0f18';
     ctx.fillRect(0, 0, viewW, viewH);
-
-    ctx.fillStyle = 'rgba(255,255,255,0.05)';
-    var pts = [[0.05, 0.12], [0.16, 0.26], [0.28, 0.08], [0.40, 0.21], [0.54, 0.12],
-               [0.67, 0.28], [0.78, 0.07], [0.90, 0.22], [0.12, 0.38], [0.85, 0.40],
-               [0.34, 0.35], [0.61, 0.37]];
-    for (var i = 0; i < pts.length; i++) {
-      ctx.beginPath();
-      ctx.arc(pts[i][0] * viewW, pts[i][1] * viewH, 2.6, 0, Math.PI * 2);
-      ctx.fill();
-    }
   }
 
   function drawPrompt(q) {
@@ -570,9 +628,17 @@
   function render(now) {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     drawBackground();
-    if (!question) return;
-    drawPrompt(question);
-    for (var i = 0; i < 4; i++) drawOption(i, now);
+    fx.drawBack(ctx);
+
+    if (question) {
+      fx.applyShake(ctx);                     // 答错震屏只作用于题目面板，不晃整个背景
+      drawPrompt(question);
+      for (var i = 0; i < 4; i++) drawOption(i, now);
+      fx.undoShake(ctx);
+    }
+
+    fx.drawFront(ctx);
+    if (vigCache) ctx.drawImage(vigCache, 0, 0, viewW, viewH);
   }
 
   // ============================================================
@@ -587,6 +653,8 @@
     if (dt > 0.1) dt = 0.1;      // 切后台回来时不要一口气扣掉大量时间
 
     var now = Date.now();
+
+    fx.update(dt);
 
     if (state === STATE.RESOLVE && now >= resolveUntil) {
       qIndex++;

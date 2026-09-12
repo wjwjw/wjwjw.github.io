@@ -1,6 +1,6 @@
 # h5-games 游戏开发规范
 
-> 初始版 **v0.1** —— 在开发过程中持续完善（演进方式见 `STANDARD.md` 第 10 节）。
+> 当前 **v0.3** —— 在开发过程中持续完善（演进方式见 `STANDARD.md` 第 11 节）。
 
 本目录是「掌中灵 TV 游戏厅」所有 H5 游戏的存放与协作规范。目标：**多个游戏可由不同人并行开发，接入同一套电视启动器，不重复造轮子。**
 
@@ -22,6 +22,7 @@
 | 输入归一化 | `shared/input.js` | `TVInput`：方向键/WASD/OK/返回 → 语义事件 |
 | 焦点导航 | `shared/nav.js` | `TVNav`：standalone 菜单空间导航（启动器内由 tv-controls 接管） |
 | TV 基础样式 | `shared/base.css` | 暗色 10-foot UI、焦点环、全屏 overlay |
+| 特效公共层 | `shared/fx.js` | `FX`：粒子 / 彩纸 / 飘字 / 扩散环 / 环境微粒 / 震屏 / 预渲染光斑·暗角（见 `STANDARD.md` §10） |
 | 公共素材 | `assets/` | 背景/音效/图标/字体（见其内 README） |
 
 ## 如何演进

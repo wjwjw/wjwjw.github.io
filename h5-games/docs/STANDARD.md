@@ -1,6 +1,6 @@
 # H5 游戏开发规范（核心）
 
-**版本 v0.2 · 补充无指针玩法（网格取景框）与覆盖层动画的实战结论**
+**版本 v0.3 · 新增「特效与表现」公共层 shared/fx.js（§10）**
 
 ## 0. 一句话原则
 每个游戏都是「能被电视遥控器玩、能单独打开运行、不依赖启动器」的静态网页。引擎不限，但必须满足下面的**契约**。
@@ -242,8 +242,91 @@ h5-games/
 - [ ] 程序化绘制的画面做过「有内容」自检（采样颜色种类数），不是一片纯色。
 - [ ] 已在 `config.js` 登记，且 `completed` 状态正确。
 - [ ] 音频在用户首次交互后正常播放；返回键可退出/回上层。
+- [ ] 接了 `shared/fx.js` 的游戏：`test/smoke.js` 已同步脚本清单与 canvas stub（见 §10.5）。
+- [ ] 特效遵守性能红线：渲染循环内不建渐变、静态装饰用 `FX.lcg` 固定种子、暗角/背景走预渲染（§10.3）。
 
-## 10. 如何演进
+## 10. 特效与表现（shared/fx.js）
+
+跨游戏统一的「技术美术」公共层：`shared/fx.js`。纯 ES5 + IIFE，只依赖 Canvas 2D，无 DOM 结构假设。
+已有特效的游戏（如 snake 自带的 burst/ring/float）**不必强行迁移**，只用它补自己缺的那几种，
+避免为了统一而重写一套已经调好的手感。
+
+### 10.1 能力清单
+
+| API | 用途 |
+|------|------|
+| `fx.burst(x, y, opts)` | 径向粒子爆发（star / heart / dot / spark / rect 五种形状） |
+| `fx.confetti(opts)` | 全屏彩纸雨（过关 / 通关庆祝） |
+| `fx.float(x, y, text, opts)` | 飘字（+10 / 连击 x2），默认带深色描边保证可读 |
+| `fx.ring(x, y, opts)` | 命中点的扩散环 |
+| `fx.setAmbient(opts)` | 环境微粒（萤火虫 / 花粉 / 气泡），支持 `x0/y0` 限定区域 |
+| `fx.shake(pow, dur)` | 震屏，配合 `fx.applyShake(ctx)` / `fx.undoShake(ctx)` |
+| `FX.glowSprite(color, r)` | 预渲染径向柔光（玩家光环 / 灯光 / 背景柔光） |
+| `FX.vignette(w, h, opts)` | 预渲染暗角 |
+| `FX.lcg(seed)` | 确定性随机（静态装饰用，见 10.3） |
+| `FX.pathStar` / `FX.pathHeart` | 矢量星形 / 心形路径 |
+
+### 10.2 接入三步
+
+```js
+var fx = FX.create();
+// 每帧
+fx.update(dt);
+// 渲染：背景 → fx.drawBack(环境微粒) → 场景 → fx.drawFront(粒子/彩纸/飘字) → 暗角
+// 触发
+fx.burst(x, y, { colors: ['#ffd166'], shapes: ['star'] });
+fx.confetti({ w: viewW });
+```
+
+### 10.3 性能红线（目标设备 MiTV4A / Chromium 47）
+
+1. **不在渲染循环里建渐变 / 拼 rgba 字符串**。背景、暗角、光斑一律预渲染成离屏 canvas，
+   每帧只 `drawImage` —— GC 压力才是老设备掉帧的主因，不是绘制量。
+2. 粒子 / 飘字 / 环有硬上限（默认 150 / 12 / 10），超限丢最老的，不设熔断挡不住爆炸场景。
+3. **震屏用 sin 相位，不用 `Math.random`**：与帧率解耦，弱机上轨迹可复现，截图与测试才稳。
+4. **静态装饰用 `FX.lcg(seed)` 固定种子**（星屑、草叶、牌面纹样）。用 `Math.random` 的话，
+   每次 resize 重绘整片位置都跳一遍，电视上转分辨率 / 旋屏时非常显眼。
+5. 暗角固定 192×108 生成再拉伸，不要按视口尺寸直出（960×540 直出的暗角要 2MB 显存）。
+6. 环境微粒是**运动**的，resize 时直接重建不会像静态纹理那样「跳」，无需固定种子。
+
+### 10.4 分层约定
+
+```
+drawBackground()        // 预渲染背景，一次 drawImage
+  → fx.drawBack(ctx)    // 环境微粒：在角色之下
+  → 场景绘制            // 用 applyShake/undoShake 只包住「该晃的层」
+  → fx.drawFront(ctx)   // 粒子 / 彩纸 / 飘字：最上层
+  → 暗角 drawImage
+  → 倒计时 / 暂停横幅   // 画在暗角之上，保证任何状态下都读得清
+```
+
+震屏只包该晃的层（棋盘、两幅画），**不要晃整屏** —— 暗角和 HUD 跟着抖很容易晕。
+
+### 10.5 ⚠️ 踩坑：接入 fx.js 必须同步改 test/smoke.js
+
+`index.html` 加了 `<script src="../shared/fx.js">` 之后，纯 Node 的 `test/smoke.js` 要同步**三处**，
+否则直接 `ReferenceError: FX is not defined` 跑挂（本次 kids-quiz 漏改即炸，memory-match 改了才没事）：
+
+1. 脚本清单里加 `'../shared/fx.js'`；
+2. `makeCtx()` 补 `rotate` / `createRadialGradient` / `strokeText`
+   （彩纸翻滚、光斑与暗角、飘字描边各需一个）；
+3. `document` stub 补 `createElement()`，返回带 `getContext()` 的离屏 canvas
+   （fx.js 预渲染光斑 / 暗角要用）。
+
+### 10.6 表现设计原则（面向低龄玩家）
+
+- **先给身体反馈，再给文字**：判定 / 命中的瞬间就该有粒子或震屏，不要只弹一行 toast。
+  找不同原来找对了只有 toast，是这类游戏最典型的「正反馈缺失」。
+- **过关别「啪」地弹结算卡片**：先撒彩纸、放光晕，延迟 1~1.6s 再弹
+  （memory-match 1.6s、puzzle-slide 1.3s、spot-difference 0.95s）。
+  **结算文本要同步写，只推迟覆盖层的显示** —— 测试要读这些文本，一起推迟就会测不到。
+  同时记得在 `startLevel` / `gotoStart` 里 `clearTimeout`，否则退出后卡片会迟到弹出。
+- **左右对称的画面（找不同）**，反馈要两边同时放；只放一边会显得画面「歪」。
+- **环境微粒用 `x0/y0` 关进该出现的区域**（如 snake 的花粉只在草地矩形里）。
+  飘到深色边框上会立刻露馅，看起来像噪点。
+- 受击 / 失败类反馈要「有代价感但不吓人」：轻震屏 + 少量粒子即可，别叠红闪 + 大抖动。
+
+## 11. 如何演进
 - 每开发一款游戏，把新坑 / 新需求补进本文档对应章节。
 - 跨游戏可复用代码 → `shared/`，公共素材 → `assets/`，并在 `docs/README.md` 清单登记。
 - 重大变更递增版本号；破坏性变更在提交说明里标注。

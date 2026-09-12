@@ -50,6 +50,12 @@
 
   var audio = new AudioManager();
 
+  // TA 特效库（shared/fx.js）：彩纸 / 震屏 / 环境花粉 / 暗角。
+  // 注意：吃到东西的星粒 / 飘字 / 扩散环仍是本文件自带的那套（它跟蛇的格子坐标绑得更紧），
+  // fx 只补它没覆盖的三种：环境氛围、受击震屏、升级彩纸。
+  var fx = FX.create();
+  var vigCache = null;     // 暗角
+
   var best = 0, score = 0, level = 1, lives = LIVES, apples = 0;
   var snake = [];           // [{x,y}]，snake[0] 是头
   var prev = [];            // 上一步的位置快照，用于帧间插值
@@ -131,6 +137,24 @@
 
     computeLayout();
     prerenderBoard();
+    prerenderVignette();
+    spawnPollen();
+  }
+
+  // TA：暗角。棋盘外那一圈死黑有了渐变压边，草地更像「被灯光照着的一块地」。
+  function prerenderVignette() {
+    vigCache = FX.vignette(viewW, viewH, { strength: 0.40 });
+  }
+
+  /* TA：草地上的花粉 / 小飞虫。只用 x0/y0 把它们关在棋盘矩形里 ——
+   * 飘到边框外面会立刻露馅（边框是深色的，花粉在黑底上像噪点）。 */
+  function spawnPollen() {
+    fx.setAmbient({
+      count: 12, w: layout.w, h: layout.h, x0: layout.x0, y0: layout.y0,
+      colors: ['#fff3b0', '#d9ffb0'],
+      glow: 22, size: [2, 5], speed: [6, 15],
+      alpha: [0.07, 0.20], core: 0.6
+    });
   }
 
   function computeLayout() {
@@ -337,6 +361,15 @@
     lives--;
     audio.sfx('hit');
     flash = 1;
+    // TA：原来只有一层红闪，孩子常常没察觉「掉了一条命」。补一记震屏 + 撞点星屑，
+    // 让「疼」这件事在身体层面先被感觉到，再去读 HUD 上少掉的那颗心。
+    if (snake.length) {
+      fx.shake(Math.max(5, layout.tile * 0.22), 0.34);
+      fx.burst(cellCx(snake[0].x), cellCy(snake[0].y), {
+        count: 14, colors: ['#e5484d', '#ff9f9f'], shapes: ['dot', 'spark'],
+        speed: [70, 220], size: [2.5, 5.5], life: [0.35, 0.7], g: 380
+      });
+    }
     var keep = Math.max(START_LEN, Math.floor(snake.length / 2));
     snake = snake.slice(0, keep);
     prev = snapshot();
@@ -386,6 +419,9 @@
     stepMs = Math.max(MIN_STEP, stepMs - STEP_DEC);
     levelFlash = 1;
     audio.sfx('level');
+    // TA：升一关是小孩少数几个「我变强了」的时刻，值得撒一把彩纸。
+    // 只在棋盘宽度范围内落，不会飘到 HUD 上干扰读数。
+    fx.confetti({ count: 34, x0: layout.x0, x1: layout.x0 + layout.w, w: viewW });
     toast('第 ' + level + ' 关 · 加速！', 'good');
     syncHud();
   }
@@ -501,6 +537,9 @@
     if (bg) ctx.drawImage(bg, layout.x0 - bgPad, layout.y0 - bgPad,
                           layout.w + bgPad * 2, layout.h + bgPad * 2);
 
+    fx.drawBack(ctx);            // 花粉：草皮之上、蛇之下
+    fx.applyShake(ctx);          // 受击震屏只晃棋盘内容，不晃整屏
+
     if (apple) drawApple(apple, now);
     if (star) drawStar(star, now);
     drawSnake(now);
@@ -517,6 +556,11 @@
       ctx.fillRect(layout.x0, layout.y0, layout.w, layout.h);
     }
 
+    fx.undoShake(ctx);
+    fx.drawFront(ctx);           // 彩纸 / 受击星屑：最上层
+    if (vigCache) ctx.drawImage(vigCache, 0, 0, viewW, viewH);
+
+    // 倒计时与「暂停中」画在暗角之上，保证任何状态下都读得清
     if (state === STATE.READY && !dbgFreeze) drawReady(now);
     if (state === STATE.PAUSE && !dbgFreeze) drawBanner('暂停中');
   }
@@ -903,6 +947,7 @@
     audio.stopBGM();
     el.hud.classList.add('hidden');
     initRound();
+    fx.clear();                    // 清掉上一局残留的彩纸 / 星屑
     hideScreens();
     show('startScreen');
     focusFirst('startScreen');
@@ -914,6 +959,7 @@
     audio.startBGM();
     audio.sfx('start');
     initRound();
+    fx.clear();
     hideScreens();
     el.hud.classList.remove('hidden');
     state = STATE.READY;
@@ -1006,6 +1052,8 @@
     if (dt > 0.1) dt = 0.1;      // 切后台回来时不要一口气走很多步
 
     var now = Date.now();
+
+    fx.update(dt);
 
     if (state === STATE.READY && now >= readyUntil) {
       state = STATE.PLAY;

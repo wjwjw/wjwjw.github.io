@@ -30,8 +30,14 @@
   var SHAKE_MS = 200;        // 滑不动时抖一下
   var PEEK_FIRST = 2200;     // 开局先看原图多久
   var PEEK_AGAIN = 1600;     // 游戏中按 OK 偷看多久
+  var CLEAR_FX_MS = 1300;    // 过关彩纸播多久再弹结算卡片
 
   var audio = new AudioManager();
+
+  // TA 特效库（shared/fx.js）：粒子 / 彩纸 / 环境微粒 / 暗角
+  var fx = FX.create();
+  var bgCache = null;      // 背景预渲染（渐变 + 星屑 + 柔光）
+  var vigCache = null;     // 暗角
 
   var best = 0;
   var score = 0;
@@ -45,6 +51,7 @@
   var anim = null;           // {to, fromR, fromC, toR, toC, start}
   var shakeT = 0;
   var snapT = 0, snapIdx = -1;
+  var clearTimer = null;     // 过关彩纸播完再弹结算卡片的延时器
 
   var timeLeft = 0, timeTotal = 0;
   var lastTickSec = -1;
@@ -121,6 +128,51 @@
 
     computeLayout();
     buildPicture();
+    prerenderStatics();
+
+    // 环境微粒：几粒暖光缓慢上漂，让「安静的手工桌」不至于死板
+    fx.setAmbient({
+      count: 10, w: viewW, h: viewH,
+      colors: ['#ffd166', '#c792ff'],
+      glow: 26, size: [3, 9], speed: [5, 13],
+      alpha: [0.04, 0.11], core: 0.5
+    });
+  }
+
+  // TA：背景预渲染。原实现每帧建渐变 + 手画星屑；预渲染后每帧一次 drawImage，
+  // 还能加一层底部柔光，让棋盘像「放在桌面上」而不是浮在黑底里。
+  function prerenderStatics() {
+    bgCache = document.createElement('canvas');
+    bgCache.width = Math.max(1, Math.round(viewW * dpr));
+    bgCache.height = Math.max(1, Math.round(viewH * dpr));
+    var g = bgCache.getContext('2d');
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    var grad = g.createLinearGradient(0, 0, 0, viewH);
+    grad.addColorStop(0, '#182742');
+    grad.addColorStop(0.55, '#101828');
+    grad.addColorStop(1, '#0a0f18');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, viewW, viewH);
+
+    // 棋盘位置下方一抹紫柔光，和拼图框的紫色描边呼应
+    var glow = FX.glowSprite('#4a3a86', 300, 0.5);
+    g.globalAlpha = 0.34;
+    g.drawImage(glow, viewW * 0.5 - 300, viewH - 320, 600, 600);
+    g.globalAlpha = 1;
+
+    // 星屑：固定种子 LCG，resize 重绘位置不跳
+    var rnd = FX.lcg(20260912);
+    for (var i = 0; i < 40; i++) {
+      g.globalAlpha = 0.05 + rnd() * 0.09;
+      g.fillStyle = '#ffffff';
+      g.beginPath();
+      g.arc(rnd() * viewW, rnd() * viewH * 0.65, 0.7 + rnd() * 1.6, 0, Math.PI * 2);
+      g.fill();
+    }
+    g.globalAlpha = 1;
+
+    vigCache = FX.vignette(viewW, viewH, { strength: 0.34 });
   }
 
   // 整张画预渲染到离屏 canvas。切片时只做 drawImage，老设备上才跑得动。
@@ -229,6 +281,8 @@
     timeTotal = Puzzle.timeOf(lv);
     timeLeft = timeTotal;
     lastTickSec = -1;
+    cancelClearTimer();
+    fx.clear();                             // 清掉上一关残留的彩纸 / 粒子
 
     board = Puzzle.shuffle(n, Puzzle.shuffleCountOf(lv));
 
@@ -268,6 +322,7 @@
     if (!res.ok) {
       shakeT = Date.now();
       audio.sfx('blocked');
+      dustAtWall(dir);        // TA：撞到边墙扬起一点灰，「推不动」有了物理感
       return;
     }
 
@@ -282,8 +337,36 @@
       snapT = Date.now();
       snapIdx = res.to;
       audio.sfx('snap');
+
+      // TA：归位爆点 —— 绿金星粒从块心喷出 + 一圈扩散环。
+      // 拼图的正反馈很稀疏（几十步才拼好一块），这一步必须给足「我做到了」的爽感。
+      var sp = cellPos(res.to);
+      var scx = sp.x + L.tile / 2, scy = sp.y + L.tile / 2;
+      fx.burst(scx, scy, {
+        count: 12, colors: ['#3ED598', '#FFD166', '#ffffff'],
+        shapes: ['star', 'dot'], speed: [60, 190],
+        size: [2.5, 6], life: [0.45, 0.85], g: 300
+      });
+      fx.ring(scx, scy, { color: '#3ED598', r1: L.tile * 0.62, lw: 4 });
     }
     updateHud();
+  }
+
+  /* 推不动时，在「撞到的那面边墙」上扬一小撮灰。
+   * 方向语义：dir 是方块滑动方向，所以 right 推不动 = 空格已在最左列，墙在空格左边。 */
+  function dustAtWall(dir) {
+    var bi = Puzzle.blankIndex(board);
+    if (bi < 0) return;
+    var p = cellPos(bi);
+    var ex, ey;
+    if (dir === 'right') { ex = p.x; ey = p.y + L.tile / 2; }
+    else if (dir === 'left') { ex = p.x + L.tile; ey = p.y + L.tile / 2; }
+    else if (dir === 'up') { ex = p.x + L.tile / 2; ey = p.y + L.tile; }
+    else { ex = p.x + L.tile / 2; ey = p.y; }
+    fx.burst(ex, ey, {
+      count: 6, colors: ['#8a93a8', '#6b7490'], shapes: ['dot'],
+      speed: [30, 95], size: [2, 4], life: [0.25, 0.45], g: 260
+    });
   }
 
   function pauseGame() {
@@ -336,9 +419,22 @@
     el.clearTip.textContent = sceneName(sceneId) + ' · ' +
       (moves <= n * n * 2 ? '好厉害，步数超少！' : (moves <= n * n * 4 ? '拼得不错，再接再厉！' : '别灰心，多玩几次就熟啦。'));
 
-    hide('hud');
-    show('clearScreen');
-    focusFirst('clearScreen');
+    // TA：拼图是「几十步才换来一次成就」的玩法，过关必须给足庆祝镜头。
+    // 结算文本照旧同步写（测试要读、用户切走也不丢），只把覆盖层推迟到彩纸之后，
+    // 否则卡片一盖，彩纸全被 90% 不透明的遮罩吃掉。
+    fx.confetti({ count: 80, x0: 0, x1: viewW, w: viewW });
+    if (clearTimer) clearTimeout(clearTimer);
+    clearTimer = setTimeout(function () {
+      clearTimer = null;
+      if (state !== STATE.CLEAR) return;      // 期间已退出/重开，就别再弹了
+      hide('hud');
+      show('clearScreen');
+      focusFirst('clearScreen');
+    }, CLEAR_FX_MS);
+  }
+
+  function cancelClearTimer() {
+    if (clearTimer) { clearTimeout(clearTimer); clearTimer = null; }
   }
 
   function gameOver() {
@@ -360,9 +456,11 @@
   function gotoStart() {
     state = STATE.START;
     audio.stopBGM();
+    cancelClearTimer();
     hideScreens();
     hide('hud');
     anim = null;
+    fx.clear();
     el.startBest.textContent = best;
     show('startScreen');
     focusFirst('startScreen');
@@ -434,22 +532,9 @@
   //  渲染
   // ============================================================
   function drawBackground() {
-    var g = ctx.createLinearGradient(0, 0, 0, viewH);
-    g.addColorStop(0, '#151f38');
-    g.addColorStop(0.55, '#101828');
-    g.addColorStop(1, '#0a0f18');
-    ctx.fillStyle = g;
+    if (bgCache) { ctx.drawImage(bgCache, 0, 0, viewW, viewH); return; }
+    ctx.fillStyle = '#0a0f18';
     ctx.fillRect(0, 0, viewW, viewH);
-
-    ctx.fillStyle = 'rgba(255,255,255,0.05)';
-    var pts = [[0.05, 0.12], [0.16, 0.26], [0.28, 0.08], [0.40, 0.21], [0.54, 0.12],
-               [0.67, 0.28], [0.78, 0.07], [0.90, 0.22], [0.12, 0.38], [0.85, 0.40],
-               [0.34, 0.35], [0.61, 0.37]];
-    for (var i = 0; i < pts.length; i++) {
-      ctx.beginPath();
-      ctx.arc(pts[i][0] * viewW, pts[i][1] * viewH, 2.6, 0, Math.PI * 2);
-      ctx.fill();
-    }
   }
 
   // 画某一块：v 是块编号（1..n*n-1），决定从整图的哪一块切
@@ -624,23 +709,28 @@
   function render(now) {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     drawBackground();
-    if (state === STATE.START) return;
+    fx.drawBack(ctx);                      // 环境微粒：棋盘之下
 
-    // 滑不动时抖一下棋盘（比弹文字更直观）
-    var shakeX = 0;
-    if (shakeT && now - shakeT < SHAKE_MS) {
-      shakeX = Math.sin((now - shakeT) / SHAKE_MS * Math.PI * 6) * 5 *
-        (1 - (now - shakeT) / SHAKE_MS);
+    if (state !== STATE.START) {
+      // 滑不动时抖一下棋盘（比弹文字更直观）
+      var shakeX = 0;
+      if (shakeT && now - shakeT < SHAKE_MS) {
+        shakeX = Math.sin((now - shakeT) / SHAKE_MS * Math.PI * 6) * 5 *
+          (1 - (now - shakeT) / SHAKE_MS);
+      }
+      if (shakeX) ctx.translate(shakeX, 0);
+
+      drawBoardFrame();
+      drawBoard(now);
+      drawReference();
+
+      if (shakeX) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      if (state === STATE.PEEK) drawPeek(now);
+      if (state === STATE.PLAY || state === STATE.PEEK) drawHint();
     }
-    if (shakeX) ctx.translate(shakeX, 0);
 
-    drawBoardFrame();
-    drawBoard(now);
-    drawReference();
-
-    if (shakeX) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    if (state === STATE.PEEK) drawPeek(now);
-    if (state === STATE.PLAY || state === STATE.PEEK) drawHint();
+    fx.drawFront(ctx);                     // 粒子 / 彩纸：最上层
+    if (vigCache) ctx.drawImage(vigCache, 0, 0, viewW, viewH);
   }
 
   // ============================================================
@@ -655,6 +745,8 @@
     if (dt > 0.1) dt = 0.1;      // 切后台回来时不要一口气扣掉大量时间
 
     var now = Date.now();
+
+    fx.update(dt);
 
     if (state === STATE.PEEK && now >= peekUntil) endPeek();
 
