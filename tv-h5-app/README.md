@@ -81,13 +81,15 @@ https://wjwjw.github.io/tv-h5-app/index.html?remote=1
      id: "my-game",
      title: "我的游戏",
      subtitle: "一句话说明",
-     icon: "🕹️",
+     icon: "../h5-games/assets/icons/my-game.svg",  // ★ 统一图标集，别用 emoji / 汉字
      folder: "my-game",          // h5-games 下的目录名
      entry: "index.html",
      completed: true,            // ★ 完成开关：false 则菜单只占位、不可进入
-     color: "#5a8dee"
+     color: "#5a8dee"            // ★ 必须与图标底板色一致
    }
    ```
+   图标集与出图标的方法见 `h5-games/assets/icons/SPEC.md`、
+   `h5-games/docs/STANDARD.md` §8.1/8.2。
 3. 本地起服务器联调；完成后 `git push` 即上线。
 4. 开发注意事项见 **GAME_DEV_GUIDE.md**。
 

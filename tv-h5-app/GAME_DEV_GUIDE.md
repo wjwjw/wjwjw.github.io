@@ -123,15 +123,22 @@ window.addEventListener("resize", resize);
   id: "my-game",
   title: "我的游戏",
   subtitle: "一句话说明（会显示在卡片和预览面板）",
-  icon: "🕹️",              // emoji 即可，也可用图片路径
+  icon: "../h5-games/assets/icons/my-game.svg",  // ★ 统一图标集，别用 emoji / 汉字
   folder: "my-game",        // h5-games 下的目录名（必须和上面一致）
   entry: "index.html",      // 入口文件，默认 index.html
   completed: true,          // ★ 完成开关：开发完成设 true；未完成设 false（菜单只占位、不可进入）
-  color: "#5a8dee",         // 卡片主题色（可选）
+  color: "#5a8dee",         // 卡片主题色。★ 必须与图标底板色一致
   tvControls: true          // 是否注入遥控增强（可选，默认 true）
 }
 ```
 
+- **`icon` 一律用统一图标集，不要 emoji、也不要用汉字**：
+  - emoji 在目标设备 MiTV4A（Android 6 / WebView≈Chromium 47）上渲染成 `□` 方框，等于没图标；
+  - 汉字当图标风格、字重、视觉重心各不一致，九个游戏九个样。
+  图标集在 `h5-games/assets/icons/`，出图标的方法见 `h5-games/docs/STANDARD.md` §8.2。
+- **`color` 必须等于该图标的底板色**（= `build_icons.py` 里该游戏的 `accent`）：
+  启动器用 `--card-color` 画选中卡片的描边与聚焦环（`css/style.css` 的 `.card.selected`），
+  两色不一致会明显「发脏」。
 - **`completed` 是「游戏是否完成」的总开关**：
   - `true` → 菜单卡片显示「可玩」，可按 OK 进入；
   - `false` → 卡片显示「即将推出」、置灰，按 OK 只提示「敬请期待」。

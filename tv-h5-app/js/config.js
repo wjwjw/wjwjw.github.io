@@ -41,11 +41,18 @@ window.APP_CONFIG = {
    *   id        唯一标识（建议与文件夹同名）
    *   title     菜单标题
    *   subtitle  副标题 / 一句话说明
-   *   icon      菜单卡片用的大图标（emoji 最省事，也可用图片路径）
+   *   icon      菜单卡片用的大图标。★ 统一用图片路径，不要用 emoji / 汉字：
+   *               · 目标设备 MiTV4A（Android 6 / WebView≈Chromium 47）渲染不了彩色 emoji，会画成 □ 方框
+   *               · 汉字当图标风格、字重、视觉重心各不一致，九个游戏九个样
+   *             统一图标集在 h5-games/assets/icons/（九枚像素风，含 SVG + PNG 64/128），
+   *             相对本页路径写 "../h5-games/assets/icons/<id>.svg"。
+   *             规范见 h5-games/assets/icons/SPEC.md，总览页 icons/preview.html。
    *   folder    h5-games/ 下的子目录名
    *   entry     该游戏的入口 html（默认 index.html）
    *   completed 是否已完成（核心开关）。false → 显示「即将推出」且不可进入
-   *   color     卡片主题色（可选）
+   *   color     卡片主题色（可选）。★ 应与该游戏图标的底板色一致 ——
+   *             选中卡片的描边与聚焦环就是用它画的，色不一致会显得脏。
+   *             图标底板色 = h5-games/assets/icons/build_icons.py 里该游戏的 accent。
    *   tvControls 是否向该游戏注入 TV 遥控增强（默认 true，仅同源游戏生效）
    */
   games: [
@@ -53,8 +60,8 @@ window.APP_CONFIG = {
       id: "number-runner",
       title: "数字跑酷",
       subtitle: "三车道无尽跑酷 · 合并相同数字",
-      // 注意：icon 走 ASCII 符号，避免电视 WebView 上 emoji 渲染成 □（见 STANDARD §6）
-      icon: "123",
+      // 统一像素图标集（h5-games/assets/icons/），见 SPEC.md
+      icon: "../h5-games/assets/icons/number-runner.svg",
       folder: "number-runner",
       entry: "index.html",
       completed: true,
@@ -66,8 +73,7 @@ window.APP_CONFIG = {
       id: "maze-challenge",
       title: "迷宫闯关",
       subtitle: "像素小冒险 · 方向键 / WASD 移动",
-      // icon 支持图片路径（老 WebView 渲染不了彩色 emoji 字形，用自托管 PNG 最稳）或纯字符
-      icon: "assets/icons/dino.png",
+      icon: "../h5-games/assets/icons/maze-challenge.svg",
       folder: "maze-challenge",
       entry: "index.html",
       completed: true,
@@ -79,8 +85,7 @@ window.APP_CONFIG = {
       id: "spot-difference",
       title: "火眼金睛",
       subtitle: "找不同 · 方向键移动取景框，OK 标记",
-      // 同上：icon 用纯字符，避免 emoji 在电视上变方框
-      icon: "找",
+      icon: "../h5-games/assets/icons/spot-difference.svg",
       folder: "spot-difference",
       entry: "index.html",
       completed: true,
@@ -92,12 +97,11 @@ window.APP_CONFIG = {
       id: "memory-match",
       title: "记忆翻牌",
       subtitle: "翻牌配对 · 预览-扣牌-方向键翻相同图案",
-      // icon 用纯字符避免电视 emoji 变方框
-      icon: "记",
+      icon: "../h5-games/assets/icons/memory-match.svg",
       folder: "memory-match",
       entry: "index.html",
       completed: true,
-      color: "#8B6CE8",
+      color: "#8b6ce8",
       tvControls: true
     },
 
@@ -105,8 +109,7 @@ window.APP_CONFIG = {
       id: "kids-quiz",
       title: "小小达人",
       subtitle: "认知问答 · 看图选答案，不识字也能玩",
-      // icon 用纯字符避免电视 emoji 变方框
-      icon: "问",
+      icon: "../h5-games/assets/icons/kids-quiz.svg",
       folder: "kids-quiz",
       entry: "index.html",
       completed: true,
@@ -118,12 +121,13 @@ window.APP_CONFIG = {
       id: "puzzle-slide",
       title: "拼图乐园",
       subtitle: "滑动拼图 · 方向键把打乱的画推回原样",
-      // icon 用纯字符避免电视 emoji 变方框
-      icon: "拼",
+      icon: "../h5-games/assets/icons/puzzle-slide.svg",
       folder: "puzzle-slide",
       entry: "index.html",
       completed: true,
-      color: "#f2a33c",
+      // 原为 #f2a33c，与「火眼金睛」重复 -> 卡片描边会同色。
+      // 改用游戏内实际配色，同时也与图标底板一致（见 icons/SPEC.md §2.2）。
+      color: "#e0524f",
       tvControls: true
     },
 
@@ -131,7 +135,7 @@ window.APP_CONFIG = {
       id: "snake",
       title: "贪吃蛇",
       subtitle: "吃苹果长大 · 方向键转弯，撞墙会穿过去",
-      icon: "蛇",
+      icon: "../h5-games/assets/icons/snake.svg",
       folder: "snake",
       entry: "index.html",
       completed: true,
@@ -144,7 +148,7 @@ window.APP_CONFIG = {
       id: "coming-soon",
       title: "新游戏待定",
       subtitle: "开发中 · 敬请期待",
-      icon: "assets/icons/target.png",
+      icon: "../h5-games/assets/icons/coming-soon.svg",
       folder: "",
       entry: "",
       completed: false,

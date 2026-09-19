@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>像素图标总览 · 掌中灵 H5 游戏</title>
+<style>
+:root{
+  --page:#f4f2ec; --ink:#2c3650; --soft:#6b7280; --line:#ddd8cc; --card:#fffefb;
+}
+body.dark{
+  --page:#0b0e1a; --ink:#eef2ff; --soft:#9aa3c0; --line:rgba(255,255,255,.12); --card:#121832;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--page); color:var(--ink); padding:34px 26px 60px;
+  font:15px/1.7 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei","Segoe UI",Roboto,sans-serif;
+  transition:background .2s ease,color .2s ease;
+}
+img{image-rendering:pixelated;image-rendering:-webkit-optimize-contrast;display:block}
+.wrap{max-width:1180px;margin:0 auto}
+header{display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;margin-bottom:6px}
+h1{font-size:26px;margin:0 0 6px;letter-spacing:.5px}
+h1 small{display:block;font-size:14px;font-weight:400;color:var(--soft);letter-spacing:0}
+.toggles{display:flex;gap:8px;flex-wrap:wrap}
+button{
+  font:inherit;font-size:13px;padding:7px 14px;border-radius:999px;cursor:pointer;
+  border:1px solid var(--line);background:var(--card);color:var(--ink);transition:.15s;
+}
+button:hover{border-color:var(--ink)}
+button.on{background:var(--ink);color:var(--page);border-color:var(--ink)}
+section{margin-top:34px}
+h2{font-size:16px;margin:0 0 12px;padding-bottom:7px;border-bottom:1px solid var(--line);font-weight:700}
+h2 em{font-style:normal;font-weight:400;color:var(--soft);font-size:13px;margin-left:8px}
+.sws{display:flex;flex-wrap:wrap;gap:10px}
+.sw{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--line);
+    border-radius:10px;padding:7px 12px 7px 8px}
+.sw i{width:22px;height:22px;border-radius:6px;border:1px solid rgba(0,0,0,.14);display:block}
+.sw b{font-size:12.5px;font-weight:600}
+.sw em{font-style:normal;font-size:11.5px;color:var(--soft);font-family:ui-monospace,Menlo,Consolas,monospace}
+.grid{display:flex;flex-wrap:wrap;margin:0 -8px}
+.card{
+  width:calc(33.333% - 16px);margin:8px;background:var(--card);border:1px solid var(--line);
+  border-radius:14px;padding:16px 16px 14px;position:relative;overflow:hidden;
+}
+.card::after{content:"";position:absolute;top:0;left:0;right:0;height:3px;background:var(--accent)}
+.card .hero{display:flex;justify-content:center;padding:8px 0 12px}
+.card h3{margin:0 0 2px;font-size:16px}
+.card .sub{margin:0;font-size:12.5px;color:var(--soft);min-height:34px}
+.card .motive{margin:8px 0 4px;font-size:12.5px;font-weight:600;color:var(--accent)}
+.card .note{margin:0 0 12px;font-size:12px;color:var(--soft);line-height:1.6;min-height:58px}
+.sizes{display:flex;align-items:flex-end;gap:12px;padding:10px 0 8px;border-top:1px dashed var(--line)}
+.sizes span{display:flex;flex-direction:column;align-items:center;gap:4px}
+.sizes i{font-style:normal;font-size:10.5px;color:var(--soft);font-family:ui-monospace,Menlo,Consolas,monospace}
+.fname{display:block;font-size:11px;color:var(--soft);font-family:ui-monospace,Menlo,Consolas,monospace;
+       word-break:break-all;line-height:1.6}
+pre{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;overflow:auto;
+    font:12.5px/1.75 ui-monospace,Menlo,Consolas,monospace;color:var(--ink);margin:0}
+.spec{display:flex;flex-wrap:wrap;gap:10px}
+.spec div{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px 14px;font-size:13px}
+.spec b{display:block;font-size:11.5px;color:var(--soft);font-weight:600;letter-spacing:.4px}
+footer{margin-top:44px;padding-top:14px;border-top:1px solid var(--line);font-size:12.5px;color:var(--soft)}
+@media (max-width:900px){.card{width:calc(50% - 16px)}}
+@media (max-width:600px){.card{width:calc(100% - 16px)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>像素图标总览 · 掌中灵 H5 游戏
+      <small>16×16 逻辑像素 · 统一底板 / 统一描边 / 统一高光 · 共 9 枚</small>
+    </h1>
+    <div class="toggles">
+      <button id="btnBg">切换明 / 暗底</button>
+      <button id="btnGrid">显示像素网格</button>
+    </div>
+  </header>
+
+  <section>
+    <h2>规格 <em>所有图标共用同一套几何，只换主题色与主体</em></h2>
+    <div class="spec">
+      <div><b>网格</b>16 × 16 逻辑像素</div>
+      <div><b>主体可用区</b>12 × 12（四周留 1px 呼吸位）</div>
+      <div><b>底板</b>2 段圆角方贴纸</div>
+      <div><b>描边</b>1px 统一深色 #2c3650</div>
+      <div><b>光源</b>左上：顶部 1px 高光带 + 底部 1px 暗面</div>
+      <div><b>产出</b>SVG（矢量）+ PNG 64 / 128</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>调色板 <em>四色基座 + 每枚一个主题色</em></h2>
+    <div class="sws"><span class="sw"><i style="background:#2c3650"></i><b>描边 / 暗面</b><em>#2c3650</em></span><span class="sw"><i style="background:#46527a"></i><b>次级暗面</b><em>#46527a</em></span><span class="sw"><i style="background:#fffcf2"></i><b>亮面 / 主体</b><em>#fffcf2</em></span><span class="sw"><i style="background:#ffd166"></i><b>强调金</b><em>#ffd166</em></span><span class="sw"><i style="background:#ff8c42"></i><b>数字跑酷</b><em>#ff8c42</em></span><span class="sw"><i style="background:#5a8dee"></i><b>迷宫闯关</b><em>#5a8dee</em></span><span class="sw"><i style="background:#f2a33c"></i><b>火眼金睛</b><em>#f2a33c</em></span><span class="sw"><i style="background:#8b6ce8"></i><b>记忆翻牌</b><em>#8b6ce8</em></span><span class="sw"><i style="background:#2ab7b0"></i><b>小小达人</b><em>#2ab7b0</em></span><span class="sw"><i style="background:#e0524f"></i><b>拼图乐园</b><em>#e0524f</em></span><span class="sw"><i style="background:#3fa96b"></i><b>贪吃蛇</b><em>#3fa96b</em></span><span class="sw"><i style="background:#ec407a"></i><b>3D 俄罗斯方块</b><em>#ec407a</em></span><span class="sw"><i style="background:#8a8f98"></i><b>新游戏待定</b><em>#8a8f98</em></span><span class="sw"><i style="background:#e5484d"></i><b>苹果红</b><em>#e5484d</em></span></div>
+  </section>
+
+  <section>
+    <h2>图标 <em>每枚下方列出 64 / 48 / 32 / 24 / 16 px 的实际渲染</em></h2>
+    <div class="grid"><article class="card" style="--accent:#ff8c42"><div class="hero"><img src="number-runner.svg" width="88" height="88" alt="数字跑酷"></div><h3>数字跑酷</h3><p class="sub">三车道无尽跑酷 · 合并相同数字</p><p class="motive">白色数字「2」+ 速度线</p><p class="note">数字直接以亮面画在底板上（不加白块），笔画 2px 保证小尺寸不糊；右侧三道长短不一的速度线给「无尽奔跑」的运动感。</p><div class="sizes"><span><img src="number-runner.svg" width="64" height="64" alt=""><i>64</i></span><span><img src="number-runner.svg" width="48" height="48" alt=""><i>48</i></span><span><img src="number-runner.svg" width="32" height="32" alt=""><i>32</i></span><span><img src="number-runner.svg" width="24" height="24" alt=""><i>24</i></span><span><img src="number-runner.svg" width="16" height="16" alt=""><i>16</i></span></div><code class="fname">number-runner.svg · number-runner.png · number-runner@2x.png</code></article><article class="card" style="--accent:#5a8dee"><div class="hero"><img src="maze-challenge.svg" width="88" height="88" alt="迷宫闯关"></div><h3>迷宫闯关</h3><p class="sub">像素小冒险 · 方向键 / WASD 移动</p><p class="motive">螺旋迷宫墙 + 金色主角</p><p class="note">白色墙体压在蓝色底板上，走廊即底色；正中 2x2 金块是「你在这里」。</p><div class="sizes"><span><img src="maze-challenge.svg" width="64" height="64" alt=""><i>64</i></span><span><img src="maze-challenge.svg" width="48" height="48" alt=""><i>48</i></span><span><img src="maze-challenge.svg" width="32" height="32" alt=""><i>32</i></span><span><img src="maze-challenge.svg" width="24" height="24" alt=""><i>24</i></span><span><img src="maze-challenge.svg" width="16" height="16" alt=""><i>16</i></span></div><code class="fname">maze-challenge.svg · maze-challenge.png · maze-challenge@2x.png</code></article><article class="card" style="--accent:#f2a33c"><div class="hero"><img src="spot-difference.svg" width="88" height="88" alt="火眼金睛"></div><h3>火眼金睛</h3><p class="sub">找不同 · 方向键移动取景框，OK 标记</p><p class="motive">放大镜 + 金色差异点</p><p class="note">镜片用暗色，是全套里唯一的大暗面，金色四角星在暗底上极醒目 =「找到了」。</p><div class="sizes"><span><img src="spot-difference.svg" width="64" height="64" alt=""><i>64</i></span><span><img src="spot-difference.svg" width="48" height="48" alt=""><i>48</i></span><span><img src="spot-difference.svg" width="32" height="32" alt=""><i>32</i></span><span><img src="spot-difference.svg" width="24" height="24" alt=""><i>24</i></span><span><img src="spot-difference.svg" width="16" height="16" alt=""><i>16</i></span></div><code class="fname">spot-difference.svg · spot-difference.png · spot-difference@2x.png</code></article><article class="card" style="--accent:#8b6ce8"><div class="hero"><img src="memory-match.svg" width="88" height="88" alt="记忆翻牌"></div><h3>记忆翻牌</h3><p class="sub">翻牌配对 · 预览-扣牌-方向键翻相同图案</p><p class="motive">两张错位牌：正面金星 + 背面金徽</p><p class="note">左上那张是扣着的牌（背面小徽），右下那张是翻开的牌（金色四角星），错位叠放点出「翻」。</p><div class="sizes"><span><img src="memory-match.svg" width="64" height="64" alt=""><i>64</i></span><span><img src="memory-match.svg" width="48" height="48" alt=""><i>48</i></span><span><img src="memory-match.svg" width="32" height="32" alt=""><i>32</i></span><span><img src="memory-match.svg" width="24" height="24" alt=""><i>24</i></span><span><img src="memory-match.svg" width="16" height="16" alt=""><i>16</i></span></div><code class="fname">memory-match.svg · memory-match.png · memory-match@2x.png</code></article><article class="card" style="--accent:#2ab7b0"><div class="hero"><img src="kids-quiz.svg" width="88" height="88" alt="小小达人"></div><h3>小小达人</h3><p class="sub">认知问答 · 看图选答案，不识字也能玩</p><p class="motive">答题卡 + 深色问号</p><p class="note">白卡 + 深色问号是全套里对比最高的一枚；问号底部留空一格再点出圆点，小尺寸下也不会糊成一团。</p><div class="sizes"><span><img src="kids-quiz.svg" width="64" height="64" alt=""><i>64</i></span><span><img src="kids-quiz.svg" width="48" height="48" alt=""><i>48</i></span><span><img src="kids-quiz.svg" width="32" height="32" alt=""><i>32</i></span><span><img src="kids-quiz.svg" width="24" height="24" alt=""><i>24</i></span><span><img src="kids-quiz.svg" width="16" height="16" alt=""><i>16</i></span></div><code class="fname">kids-quiz.svg · kids-quiz.png · kids-quiz@2x.png</code></article><article class="card" style="--accent:#e0524f"><div class="hero"><img src="puzzle-slide.svg" width="88" height="88" alt="拼图乐园"></div><h3>拼图乐园</h3><p class="sub">滑动拼图 · 方向键把打乱的画推回原样</p><p class="motive">3x3 拼图板：中心空位 + 右下金色块</p><p class="note">深色格线把 2x2 白格切成九宫格；中心那格露底色 = 空位，右下金格 = 正在推的块。</p><div class="sizes"><span><img src="puzzle-slide.svg" width="64" height="64" alt=""><i>64</i></span><span><img src="puzzle-slide.svg" width="48" height="48" alt=""><i>48</i></span><span><img src="puzzle-slide.svg" width="32" height="32" alt=""><i>32</i></span><span><img src="puzzle-slide.svg" width="24" height="24" alt=""><i>24</i></span><span><img src="puzzle-slide.svg" width="16" height="16" alt=""><i>16</i></span></div><code class="fname">puzzle-slide.svg · puzzle-slide.png · puzzle-slide@2x.png</code></article><article class="card" style="--accent:#3fa96b"><div class="hero"><img src="snake.svg" width="88" height="88" alt="贪吃蛇"></div><h3>贪吃蛇</h3><p class="sub">吃苹果长大 · 方向键转弯，撞墙会穿过去</p><p class="motive">L 形蛇身（带眼）+ 红苹果</p><p class="note">苹果红与绿底板互补，是全套里唯一用暖色撞色的一枚；苹果做成 5x4 的圆润轮廓 + 1px 果柄，蛇头两只暗眼定住朝向。</p><div class="sizes"><span><img src="snake.svg" width="64" height="64" alt=""><i>64</i></span><span><img src="snake.svg" width="48" height="48" alt=""><i>48</i></span><span><img src="snake.svg" width="32" height="32" alt=""><i>32</i></span><span><img src="snake.svg" width="24" height="24" alt=""><i>24</i></span><span><img src="snake.svg" width="16" height="16" alt=""><i>16</i></span></div><code class="fname">snake.svg · snake.png · snake@2x.png</code></article><article class="card" style="--accent:#ec407a"><div class="hero"><img src="brick-3d.svg" width="88" height="88" alt="3D 俄罗斯方块"></div><h3>3D 俄罗斯方块</h3><p class="sub">基于 three.js 的 3D 俄罗斯方块，鼠标旋转视角</p><p class="motive">等距立方体（顶 / 左 / 右三面）</p><p class="note">顶面亮、左面金、右面暗——三面三个明度台阶，小尺寸下也能读出「立体的方块」。</p><div class="sizes"><span><img src="brick-3d.svg" width="64" height="64" alt=""><i>64</i></span><span><img src="brick-3d.svg" width="48" height="48" alt=""><i>48</i></span><span><img src="brick-3d.svg" width="32" height="32" alt=""><i>32</i></span><span><img src="brick-3d.svg" width="24" height="24" alt=""><i>24</i></span><span><img src="brick-3d.svg" width="16" height="16" alt=""><i>16</i></span></div><code class="fname">brick-3d.svg · brick-3d.png · brick-3d@2x.png</code></article><article class="card" style="--accent:#8a8f98"><div class="hero"><img src="coming-soon.svg" width="88" height="88" alt="新游戏待定"></div><h3>新游戏待定</h3><p class="sub">开发中 · 敬请期待</p><p class="motive">粗十字 + 金色中心</p><p class="note">占位枚：中性灰底板不跟任何游戏抢眼，粗十字读作「还会长出新东西」。</p><div class="sizes"><span><img src="coming-soon.svg" width="64" height="64" alt=""><i>64</i></span><span><img src="coming-soon.svg" width="48" height="48" alt=""><i>48</i></span><span><img src="coming-soon.svg" width="32" height="32" alt=""><i>32</i></span><span><img src="coming-soon.svg" width="24" height="24" alt=""><i>24</i></span><span><img src="coming-soon.svg" width="16" height="16" alt=""><i>16</i></span></div><code class="fname">coming-soon.svg · coming-soon.png · coming-soon@2x.png</code></article></div>
+  </section>
+
+  <section>
+    <h2>接入启动器 <em>把 config.js 里各游戏的 icon 字段换成对应 SVG 路径即可</em></h2>
+    <pre>  {
+    id: "number-runner",
+    icon: "../h5-games/assets/icons/number-runner.svg",
+    color: "#ff8c42"
+  },
+  {
+    id: "maze-challenge",
+    icon: "../h5-games/assets/icons/maze-challenge.svg",
+    color: "#5a8dee"
+  },
+  {
+    id: "spot-difference",
+    icon: "../h5-games/assets/icons/spot-difference.svg",
+    color: "#f2a33c"
+  },
+  {
+    id: "memory-match",
+    icon: "../h5-games/assets/icons/memory-match.svg",
+    color: "#8b6ce8"
+  },
+  {
+    id: "kids-quiz",
+    icon: "../h5-games/assets/icons/kids-quiz.svg",
+    color: "#2ab7b0"
+  },
+  {
+    id: "puzzle-slide",
+    icon: "../h5-games/assets/icons/puzzle-slide.svg",
+    color: "#e0524f"
+  },
+  {
+    id: "snake",
+    icon: "../h5-games/assets/icons/snake.svg",
+    color: "#3fa96b"
+  },
+  {
+    id: "brick-3d",
+    icon: "../h5-games/assets/icons/brick-3d.svg",
+    color: "#ec407a"
+  },
+  {
+    id: "coming-soon",
+    icon: "../h5-games/assets/icons/coming-soon.svg",
+    color: "#8a8f98"
+  },</pre>
+  </section>
+
+  <footer>由 <code>build_icons.py</code> 生成 · 改图标只需改脚本里的 ART 网格后重跑</footer>
+</div>
+<script>
+(function () {
+  var body = document.body;
+  document.getElementById('btnBg').onclick = function () {
+    body.classList.toggle('dark');
+  };
+  var on = false;
+  document.getElementById('btnGrid').onclick = function () {
+    on = !on;
+    this.classList.toggle('on', on);
+    var imgs = document.querySelectorAll('.card img');
+    for (var i = 0; i < imgs.length; i++) {
+      imgs[i].style.backgroundImage = on
+        ? 'linear-gradient(45deg, rgba(128,128,128,.30) 25%, transparent 25%, transparent 75%, rgba(128,128,128,.30) 75%),'
+        + 'linear-gradient(45deg, rgba(128,128,128,.30) 25%, transparent 25%, transparent 75%, rgba(128,128,128,.30) 75%)'
+        : 'none';
+      imgs[i].style.backgroundSize = on ? '4px 4px, 4px 4px' : 'auto';
+      imgs[i].style.backgroundPosition = on ? '0 0, 2px 2px' : '0 0';
+    }
+  };
+})();
+</script>
+</body>
+</html>

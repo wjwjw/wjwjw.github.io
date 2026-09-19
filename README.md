@@ -32,7 +32,11 @@
   - `memory-match/` — 记忆翻牌配对（预览-扣牌-翻相同图案）
   - `kids-quiz/` — 小小达人认知问答（7 种题型全图形化，低龄儿童不识字也能玩）
   - `puzzle-slide/` — 拼图乐园滑动拼图（3×3→4×4，6 个矢量场景，打乱必定可解）
-  - `docs/STANDARD.md` — TV 游戏开发规范（目录结构、输入契约、兼容性约束）
+  - `snake/` — 贪吃蛇（吃苹果长大，方向键转弯）
+  - `assets/icons/` — **统一像素风游戏图标集**（九枚，16×16 网格、统一底板/描边/高光，
+    每枚一个主题色；SVG + PNG 64/128）。规范见其内 `SPEC.md`，总览页 `preview.html`，
+    重新生成 `python build_icons.py`
+  - `docs/STANDARD.md` — TV 游戏开发规范（目录结构、输入契约、兼容性约束、图标接入）
   - `start-server.bat` / `start-server.sh` — 本地开发服务器（电视通过局域网 IP 访问）
 - `threejs-brick-game/` — 3D 俄罗斯方块（three.js）
 - `url-speed-test/` — 网页测速工具

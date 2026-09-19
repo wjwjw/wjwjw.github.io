@@ -227,16 +227,37 @@ h5-games/
   id: "my-game",
   title: "我的游戏",
   subtitle: "一句话说明",
-  icon: "🎮",            // 见 §6：电视上 emoji 会成方框，正式可用图片路径
+  icon: "../h5-games/assets/icons/my-game.svg",  // ★ 图片路径，别用 emoji / 汉字（见下）
   folder: "my-game",     // h5-games/ 下目录名
   entry: "index.html",
   completed: false,      // ★ 总开关：做完设 true；未完成设 false（菜单只占位）
-  color: "#5a8dee",      // 卡片主题色(可选)
+  color: "#5a8dee",      // 卡片主题色。★ 必须与图标底板色一致（见下）
   tvControls: true       // 是否注入遥控增强(可选,默认 true,仅同源)
 }
 ```
 - `completed` 是「游戏是否完成」开关：`false` → 菜单显示「即将推出」、不可进入；`true` → 可玩。
 - 本地/正式切换由 `useRemote` 与 `?local=` / `?remote=` 控制，游戏无需感知。
+
+### 8.1 图标：一律用统一图标集，不要 emoji / 汉字
+`icon` 字段虽然支持纯字符，但**两种字符方案都不能用**：
+- **emoji**：目标设备渲染成 `□` 方框（见 §6），等于没有图标；
+- **汉字**：风格、字重、视觉重心各不一致，九个游戏九个样，菜单看着散。
+
+统一图标集在 `h5-games/assets/icons/`（九枚像素风，SVG + PNG 64/128），
+规格见 `h5-games/assets/icons/SPEC.md`，总览页 `h5-games/assets/icons/preview.html`。
+新游戏按 §8.2 出图标。
+
+### 8.2 新游戏出图标（三步）
+1. 打开 `h5-games/assets/icons/build_icons.py`，往 `ICONS` 里追加一项：
+   `id / title / subtitle / accent / motive / note / art`。
+2. `art` 画一张 **12×12** 字符网格（主体保持在 `1..10` 区间内，别贴到描边上；
+   笔画最小 2px，1px 笔画在 64px 下会糊）。字符表见 SPEC.md §4。
+3. 主题色挑一个**与已有九色色相区分度高**的色（现有已占：橙、蓝、琥珀、紫、青、红、绿、玫红、灰），
+   跑 `python build_icons.py`，在 `preview.html` 里确认 16/24/32px 还认得出。
+
+> ⚠️ **`color` 必须等于该图标的 `accent`**。启动器用 `--card-color` 画选中卡片的描边与聚焦环
+> （`tv-h5-app/css/style.css` 的 `.card.selected`），色不一致会明显「发脏」。
+> 反向也成立：不要为了迁就旧卡片色去改图标底板色 —— 九枚图标摆在一起时的可区分性更重要。
 
 ## 9. 验收清单（发布前）
 - [ ] `h5-games/<id>/index.html` 存在，直接打开可独立运行。
@@ -257,6 +278,7 @@ h5-games/
 - [ ] 方向键语义经过断言（是「方块滑动方向」还是「空格移动方向」，别搞反）。
 - [ ] 程序化绘制的画面做过「有内容」自检（采样颜色种类数），不是一片纯色。
 - [ ] 已在 `config.js` 登记，且 `completed` 状态正确。
+- [ ] `icon` 用的是 `assets/icons/<id>.svg` 图片路径（不是 emoji / 汉字），且 `color` 与图标底板色一致（§8.1/8.2）。
 - [ ] 音频在用户首次交互后正常播放；返回键可退出/回上层。
 - [ ] 接了 `shared/fx.js` 的游戏：`test/smoke.js` 已同步脚本清单与 canvas stub（见 §10.5）。
 - [ ] 特效遵守性能红线：渲染循环内不建渐变、静态装饰用 `FX.lcg` 固定种子、暗角/背景走预渲染（§10.3）。
