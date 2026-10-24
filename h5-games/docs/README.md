@@ -22,7 +22,7 @@
 | 输入归一化 | `shared/input.js` | `TVInput`：方向键/WASD/OK/返回 → 语义事件 |
 | 焦点导航 | `shared/nav.js` | `TVNav`：standalone 菜单空间导航（启动器内由 tv-controls 接管） |
 | TV 基础样式 | `shared/base.css` | 暗色 10-foot UI、焦点环、全屏 overlay |
-| 特效公共层 | `shared/fx.js` | `FX`：粒子 / 彩纸 / 飘字 / 扩散环 / 环境微粒 / 震屏 / 预渲染光斑·暗角（见 `STANDARD.md` §10） |
+| 特效公共层 | `shared/fx.js` | `FX`：粒子 / 彩纸 / 飘字 / 扩散环 / 环境微粒 / 震屏 / 连续发射器·柔光脉冲·全屏闪光 / 预渲染光斑·暗角（见 `STANDARD.md` §10） |
 | 公共素材 | `assets/` | 背景/音效/图标/字体（见其内 README） |
 | 像素风游戏图标 | `assets/icons/` | 九枚一套（16×16 网格、统一底板/描边/高光、每枚一主题色），SVG + PNG 64/128；规范见 `assets/icons/SPEC.md`，总览页 `assets/icons/preview.html` |
 

@@ -1,6 +1,6 @@
 # H5 游戏开发规范（核心）
 
-**版本 v0.3 · 新增「特效与表现」公共层 shared/fx.js（§10）**
+**版本 v0.4 · fx.js 升级到 v0.2（连续发射器 / 柔光脉冲 / 全屏闪光 / 新形状）+ 迷宫通关庆祝（§10）**
 
 ## 0. 一句话原则
 每个游戏都是「能被电视遥控器玩、能单独打开运行、不依赖启动器」的静态网页。引擎不限，但必须满足下面的**契约**。
@@ -185,6 +185,12 @@ h5-games/
 > → `Runtime.evaluate` 模拟按键 → `Page.captureScreenshot`）就稳了。
 > `memory-match/test/shot.js` 是一份可复用的脚手架。
 >
+> ⚠️ 再补一个 CDP 实测坑（本机 Chrome 156 headless）：即使用真实时钟，**部分 headless
+> 页面的 rAF 游戏时钟会失真到真实时间的 ~14%**（2.1s 真实时间只累计 ~0.3s 的 dt，
+> 表现为「按键第一次生效、之后全被 moveLock 卡住」，而 `Date.now()` 驱动的逻辑一切正常）。
+> 判别方法：给 `window.requestAnimationFrame` 包一层计数，再对比真实时间；
+> 截图脚本里可临时用真实时钟额外衰减 moveLock 这类游戏内冷却，真机不受影响。
+>
 > 补充（**排版几何量化验收**：截图只能靠肉眼看，回归时很容易漏。做法是用同一套 CDP
 > 把「量」取回来做断言，`kids-quiz/test/layout.js` 是模板：
 > ① DOM 侧用 `getBoundingClientRect()` 拿覆盖层矩形；
@@ -282,6 +288,7 @@ h5-games/
 - [ ] 音频在用户首次交互后正常播放；返回键可退出/回上层。
 - [ ] 接了 `shared/fx.js` 的游戏：`test/smoke.js` 已同步脚本清单与 canvas stub（见 §10.5）。
 - [ ] 特效遵守性能红线：渲染循环内不建渐变、静态装饰用 `FX.lcg` 固定种子、暗角/背景走预渲染（§10.3）。
+- [ ] 有通关庆祝的游戏：结算文本同步写、覆盖层延后弹，且庆祝期间暂停键失效（见 §10.6）。
 
 ## 10. 特效与表现（shared/fx.js）
 
@@ -293,16 +300,20 @@ h5-games/
 
 | API | 用途 |
 |------|------|
-| `fx.burst(x, y, opts)` | 径向粒子爆发（star / heart / dot / spark / rect 五种形状） |
+| `fx.burst(x, y, opts)` | 径向粒子爆发（star / heart / dot / spark / **diamond / spark4** / rect 七种形状） |
 | `fx.confetti(opts)` | 全屏彩纸雨（过关 / 通关庆祝） |
-| `fx.float(x, y, text, opts)` | 飘字（+10 / 连击 x2），默认带深色描边保证可读 |
+| `fx.float(x, y, text, opts)` | 飘字（+10 / 连击 x2），默认带深色描边 + 弹出缩放（`pop:false` 关掉） |
 | `fx.ring(x, y, opts)` | 命中点的扩散环 |
+| `fx.emit(x, y, dt, opts)` | **连续发射器**（拖尾 / 扬尘 / 速度线）：按 `rate×dt` 累积生成、帧率无关；激活期间每帧调一次 |
+| `fx.glow(x, y, opts)` | **柔光脉冲**：`lighter` 叠加的「点亮感」，比环更柔（拾取 / 落点 / 爆点） |
+| `fx.flash(color, dur, opts)` | **全屏闪光**（通关金光 / 大事件白闪）；需先 `fx.setView(w, h)` |
+| `fx.setView(w, h)` | 告知视口尺寸（`flash` 要用；resize 时调） |
 | `fx.setAmbient(opts)` | 环境微粒（萤火虫 / 花粉 / 气泡），支持 `x0/y0` 限定区域 |
 | `fx.shake(pow, dur)` | 震屏，配合 `fx.applyShake(ctx)` / `fx.undoShake(ctx)` |
 | `FX.glowSprite(color, r)` | 预渲染径向柔光（玩家光环 / 灯光 / 背景柔光） |
 | `FX.vignette(w, h, opts)` | 预渲染暗角 |
 | `FX.lcg(seed)` | 确定性随机（静态装饰用，见 10.3） |
-| `FX.pathStar` / `FX.pathHeart` | 矢量星形 / 心形路径 |
+| `FX.pathStar` / `FX.pathHeart` / `FX.pathSpark4` | 矢量星形 / 心形 / 四角星路径 |
 
 ### 10.2 接入三步
 
@@ -315,6 +326,10 @@ fx.update(dt);
 fx.burst(x, y, { colors: ['#ffd166'], shapes: ['star'] });
 fx.confetti({ w: viewW });
 ```
+
+要用 `flash` 的话，在 resize 时补一句 `fx.setView(viewW, viewH)`（它只影响全屏闪光，缺了就是
+`flash` 静默不生效）。`drawFront` 的层序是 **柔光 → 环 → 粒子/彩纸 → 全屏闪光 → 飘字**，
+柔光走 `lighter` 叠加，所以别把它和 `flash` 混着叠太多层，老设备上会糊。
 
 ### 10.3 性能红线（目标设备 MiTV4A / Chromium 47）
 
@@ -349,20 +364,75 @@ drawBackground()        // 预渲染背景，一次 drawImage
 2. `makeCtx()` 补 `rotate` / `createRadialGradient` / `strokeText`
    （彩纸翻滚、光斑与暗角、飘字描边各需一个）；
 3. `document` stub 补 `createElement()`，返回带 `getContext()` 的离屏 canvas
-   （fx.js 预渲染光斑 / 暗角要用）。
+   （fx.js 预渲染光斑 / 暗角要用）；
+4. 用到 `emit` / `glow` / `flash` 的游戏，`makeCtx()` 还要补 `drawImage`（光斑和粒子都是
+   `drawImage` 贴上去的）以及 `globalAlpha` / `globalCompositeOperation` 两个属性。
+   `fx.setView()` 不调也不报错，只是 `flash` 静默不生效。
 
 ### 10.6 表现设计原则（面向低龄玩家）
 
 - **先给身体反馈，再给文字**：判定 / 命中的瞬间就该有粒子或震屏，不要只弹一行 toast。
   找不同原来找对了只有 toast，是这类游戏最典型的「正反馈缺失」。
 - **过关别「啪」地弹结算卡片**：先撒彩纸、放光晕，延迟 1~1.6s 再弹
-  （memory-match 1.6s、puzzle-slide 1.3s、spot-difference 0.95s）。
+  （maze-challenge 1.15s、memory-match 1.6s、puzzle-slide 1.3s、spot-difference 0.95s）。
   **结算文本要同步写，只推迟覆盖层的显示** —— 测试要读这些文本，一起推迟就会测不到。
   同时记得在 `startLevel` / `gotoStart` 里 `clearTimeout`，否则退出后卡片会迟到弹出。
+- **引擎侧庆祝：留一个「可收手」的状态，且庆祝期间别响应暂停**。maze-challenge 的做法是
+  引擎在 `"win"` 态继续跑循环把彩纸/金光演完（`celebrateT` 归零后收成 `"won"`，`loop` 守卫
+  下一帧自然停手），`onWin` 在判定当帧就**同步**回调（文本/进度立刻落盘），覆盖层交给 main.js
+  用 `setTimeout` 延后 `CELEBRATE` 毫秒再弹。两个必踩的坑：
+  ① `pause()` 只在 `"playing"` 生效 —— 否则庆祝期间一按暂停就停在 `"win"` 态，而 `resume()`
+  又要求 `"paused"`，结算卡永远弹不出来（软锁死）；main.js 侧那几个「弹暂停层」的入口也要
+  一起加 `game.state === "playing"` 判断；
+  ② `show()` 里凡是切到非 `winScreen` 的界面都要 `cancelWinTimer()` —— 否则离开游戏后
+  卡片会迟到弹到菜单上。
 - **左右对称的画面（找不同）**，反馈要两边同时放；只放一边会显得画面「歪」。
 - **环境微粒用 `x0/y0` 关进该出现的区域**（如 snake 的花粉只在草地矩形里）。
   飘到深色边框上会立刻露馅，看起来像噪点。
 - 受击 / 失败类反馈要「有代价感但不吓人」：轻震屏 + 少量粒子即可，别叠红闪 + 大抖动。
+
+### 10.7 三维（three.js）游戏怎么接入：屏幕空间特效层
+
+fx.js 是 Canvas 2D 库，画不进 WebGL 场景。number-runner 的做法是**叠一块 2D 覆盖画布**
+（`<canvas id="fx2d">`），特效全部画在屏幕空间，3D 坐标用相机投影换算成屏幕像素：
+
+```js
+// ① 覆盖画布：叠在 WebGL 之上、HUD 之下（z-index 5），不接指针
+//    style.css: #fx2d { position:absolute; top:0; left:0; right:0; z-index:5;
+//                       display:block; margin:0 auto; pointer-events:none; }
+//    注意 margin:0 auto —— 覆盖层要和 #game（margin auto 居中、intrinsic 尺寸）重叠对齐，
+//    跑道不满屏时特效才不会「错位」。canvas.width/height 在 resize() 里与 #game 同步设置，
+//    并按 dpr(≤2) 放大背景存储、CSS 宽高钉回 W×H（否则覆盖层会变大错位），每帧绘制前
+//    setTransform(dpr,0,0,dpr,0,0) —— 和 renderer.setPixelRatio 同一策略，
+//    高分屏上粒子才不会比 WebGL 画面糊。
+
+// ② 投影：世界坐标 → 屏幕像素。复用同一个 Vector3，别每帧 new（GC）。
+var _v3 = null;
+function project(x, y, z) {
+  if (!_v3) _v3 = new THREE.Vector3();
+  _v3.set(x, y, z).project(camera);
+  if (_v3.z > 1) return null;                       // 目标在镜头之后
+  return { x: (_v3.x + 1) / 2 * W, y: (1 - _v3.y) / 2 * H };
+}
+
+// ③ 每帧：fx.update 独立于游戏状态（菜单里环境浮尘也要动）；渲染在 renderer.render 之后
+function loop(t) {
+  fx.update(dt);
+  if (state === STATE.PLAY) update(dt);
+  render();   // 末尾：fx2.clearRect(0,0,W,H); fx.drawBack(fx2); fx.drawFront(fx2);
+}
+```
+
+经验：
+- **命中反馈挂在事件点，不挂在帧循环**：合并/炸弹/传送在 `resolveHit` / `doMerge` 里取
+  `project(玩家或实体)` 的屏幕坐标喷一次粒子；投影可能返回 `null`（镜头后），先判空再喷。
+- **速度线用 `emit` + `jitter`**：传送冲刺期间每帧
+  `fx.emit(W*0.5, H*0.18, dt, { rate:70, angle:Math.PI/2, jitter:[W*0.5, H*0.16], shapes:['spark'], speed:[520,900] })`
+  —— 落点在顶部一条带里抖开、向下高速拉出短光痕，比逐帧随机 `burst` 省心且帧率无关。
+- **覆盖层的 Boss/结算彩纸会被 DOM 覆盖层挡住**：DOM overlay 的 z-index 更高，结算卡
+  弹出后彩纸就看不见了。要「先庆祝后弹卡」就照 §10.6 的延迟弹卡做，别指望彩纸浮在卡片上。
+- number-runner 没有 test 目录，接入后至少要 `node --check js/game.js`，并在真机/CDP 截图里
+  确认覆盖层与跑道对齐（本节 ① 的 margin 对齐坑纯看代码看不出来）。
 
 ## 11. 如何演进
 - 每开发一款游戏，把新坑 / 新需求补进本文档对应章节。
