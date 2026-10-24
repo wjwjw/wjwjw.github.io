@@ -1,11 +1,13 @@
 /*
- * fx.js —— 共享特效库（技术美术向，连接美术与开发的公共层）
+ * fx.js —— 共享特效库（技术美术向，连接美术与开发的公共层）v0.2
  *
- * 提供四类可复用效果，各游戏按需取用：
- *   1) 粒子爆发 / 全屏彩纸（star / heart / dot / spark / rect 五种形状）
- *   2) 飘字 / 扩散环（得分与命中反馈）
+ * 提供六类可复用效果，各游戏按需取用：
+ *   1) 粒子爆发 / 全屏彩纸（star / heart / dot / spark / diamond / spark4 / rect 七种形状）
+ *   2) 飘字 / 扩散环（得分与命中反馈；飘字带「弹出」缩放）
  *   3) 环境漂浮微粒（萤火虫 / 尘埃 / 气泡，让背景「活」起来）
- *   4) 预渲染资产：柔光光斑 glowSprite、暗角 vignette
+ *   4) 连续发射器 emit（拖尾 / 尘土 / 速度线，按 rate×dt 累积生成，帧率无关）
+ *   5) 柔光脉冲 glow（lighter 叠加的「点亮感」）与全屏闪光 flash（需 setView）
+ *   6) 预渲染资产：柔光光斑 glowSprite、暗角 vignette
  *
  * 性能约定（老设备 = MiTV4A / Android 6 / WebView ≈ Chromium 47）：
  *   - 所有渐变 / 光斑 / 暗角都预渲染成离屏 canvas，每帧只 drawImage；
@@ -21,6 +23,9 @@
  *           fx.confetti({w: viewW});            过关彩纸雨
  *           fx.float(x, y, '+50', {color:'#ffd166'});
  *           fx.ring(x, y, {color:'#7ee0b8'});
+ *           fx.glow(x, y, {color:'#ffd166'});   拾取 / 落点柔光脉冲
+ *           fx.emit(x, y, dt, {rate:40, angle:-Math.PI/2});   拖尾 / 尘土（每帧调）
+ *           fx.flash('#ffd166', 0.3);           全屏闪光（先 fx.setView(w, h)）
  *           fx.shake(6, 0.3);                   配合 fx.applyShake(ctx) / undoShake(ctx)
  *   资产：  var glow = FX.glowSprite('#ffd166', 64);   光斑（玩家光环、灯光）
  *           var vig  = FX.vignette(viewW, viewH);      暗角（resize 时重建）
@@ -123,6 +128,17 @@
     ctx.closePath();
   }
 
+  // 四角星（拾取闪光 / 星光点缀；与 maze 的 sparkle 同款造型，收进公共层）
+  function pathSpark4(ctx, x, y, r) {
+    var q = r * 0.24;
+    ctx.beginPath();
+    ctx.moveTo(x, y - r); ctx.lineTo(x + q, y - q);
+    ctx.lineTo(x + r, y); ctx.lineTo(x + q, y + q);
+    ctx.lineTo(x, y + r); ctx.lineTo(x - q, y + q);
+    ctx.lineTo(x - r, y); ctx.lineTo(x - q, y - q);
+    ctx.closePath();
+  }
+
   // ---------- 特效实例 ----------
   function create(opts) {
     opts = opts || {};
@@ -130,12 +146,17 @@
     var maxFloats = opts.maxFloats || 12;
     var maxRings = opts.maxRings || 10;
 
-    var parts = [];      // 爆发粒子 + 彩纸共用一个池（彩纸只是带摆动/翻滚的 rect 粒子）
+    var parts = [];      // 爆发粒子 + 彩纸 + 发射器共用一个池（彩纸只是带摆动/翻滚的 rect 粒子）
     var floats = [];
     var rings = [];
+    var glows = [];      // 柔光脉冲
+    var flashes = [];    // 全屏闪光
     var motes = [];      // 环境微粒
     var ambCfg = null;
     var ambSprites = [];
+    var glowCache = {};  // 颜色 → 32px 光斑（glow 脉冲按需缩放 drawImage）
+    var emitAcc = 0;     // emit 速率累加器（帧率无关）
+    var viewW = 0, viewH = 0;   // flash 用的视口尺寸（setView 设置）
     var time = 0;        // 实例内部时钟（秒），震屏/摆动都基于它，保证确定性
 
     var shakeT = 0, shakeDur = 0, shakePow = 0;
@@ -214,7 +235,7 @@
       if (rings.length > maxRings) rings.shift();
     }
 
-    /* 飘字（+10 / 连击 x2）。opts: {color, size, life, stroke(默认带描边)} */
+    /* 飘字（+10 / 连击 x2）。opts: {color, size, life, stroke(默认带描边), pop(默认带弹出缩放)} */
     function floatText(x, y, text, o) {
       o = o || {};
       floats.push({
@@ -222,10 +243,85 @@
         color: o.color || '#ffd166',
         age: 0, life: o.life || 0.9,
         size: o.size || 20,
-        stroke: o.stroke !== false
+        stroke: o.stroke !== false,
+        pop: o.pop !== false
       });
       if (floats.length > maxFloats) floats.shift();
     }
+
+    /* 连续发射器（拖尾 / 尘土 / 速度线）：按 rate(个/秒) × dt 累积生成，帧率无关。
+     * 拖尾激活期间的每帧调一次即可。opts:
+     *   {rate, colors, shapes, speed:[min,max], size:[min,max], life:[min,max],
+     *    angle(发射方向弧度，缺省全向), spread(角度抖动), g, drag, shrink,
+     *    vx/vy( inherited 初速), jitter:[jx,jy](落点在 ±jx/±jy 内抖开，做全屏速度线用)} */
+    function emit(x, y, dt, o) {
+      o = o || {};
+      var rate = o.rate || 30;
+      emitAcc += rate * dt;
+      var n = Math.floor(emitAcc);
+      emitAcc -= n;
+      if (n > 12) n = 12;              // 卡顿后一帧最多补 12 个，别一口气喷一大坨
+      if (n <= 0) return;
+      var jx = o.jitter ? o.jitter[0] : 0, jy = o.jitter ? o.jitter[1] : 0;
+      var colors = o.colors || PALETTE;
+      var shapes = o.shapes || ['dot'];
+      var sp0 = o.speed ? o.speed[0] : 20, sp1 = o.speed ? o.speed[1] : 80;
+      var s0 = o.size ? o.size[0] : 2, s1 = o.size ? o.size[1] : 5;
+      var l0 = o.life ? o.life[0] : 0.3, l1 = o.life ? o.life[1] : 0.7;
+      var spread = o.spread != null ? o.spread : 0.6;
+      var i;
+      for (i = 0; i < n; i++) {
+        var a = (o.angle != null) ? o.angle + rand(-spread, spread) : rand(0, TAU);
+        var sp = rand(sp0, sp1);
+        parts.push({
+          x: x + (jx ? rand(-jx, jx) : 0),
+          y: y + (jy ? rand(-jy, jy) : 0),
+          vx: (o.vx || 0) + Math.cos(a) * sp,
+          vy: (o.vy || 0) + Math.sin(a) * sp,
+          g: o.g != null ? o.g : 0,
+          drag: o.drag != null ? o.drag : 1.2,
+          age: 0, life: rand(l0, l1),
+          size: rand(s0, s1),
+          color: colors[randi(0, colors.length - 1)],
+          shape: shapes[randi(0, shapes.length - 1)],
+          rot: rand(0, TAU), vrot: rand(-4, 4),
+          tumble: 0, vtumble: 0, swayAmp: 0, phase: 0,
+          shrink: o.shrink !== false, fadeEnd: false
+        });
+      }
+      while (parts.length > maxParticles) parts.shift();
+    }
+
+    /* 柔光脉冲（lighter 叠加）：拾取 / 落点 / 爆点的「点亮感」，比环更柔。
+     * opts: {r0, r1, life, color, alpha} */
+    function glow(x, y, o) {
+      o = o || {};
+      glows.push({
+        x: x, y: y,
+        r0: o.r0 != null ? o.r0 : 8,
+        r1: o.r1 != null ? o.r1 : 40,
+        age: 0, life: o.life || 0.5,
+        color: o.color || '#ffd166',
+        alpha: o.alpha != null ? o.alpha : 0.85
+      });
+      if (glows.length > 8) glows.shift();
+    }
+
+    /* 全屏闪光（通关金光 / 大事件白闪）。先 fx.setView(w, h)（resize 时调一次）。
+     * opts: {alpha(峰值不透明度，默认 0.5)} */
+    function flash(color, dur, o) {
+      o = o || {};
+      if (!viewW || !viewH) return;
+      flashes.push({
+        color: color || '#ffffff',
+        age: 0, life: dur || 0.3,
+        max: o.alpha != null ? o.alpha : 0.5
+      });
+      if (flashes.length > 3) flashes.shift();
+    }
+
+    /* 告知视口尺寸（flash 需要；resize 时调用） */
+    function setView(w, h) { viewW = w; viewH = h; }
 
     /* 环境微粒（萤火虫 / 尘埃 / 气泡 / 花粉）。
      * opts: {count, w, h, x0, y0(限定区域左上角，缺省 0), colors, glow(光斑半径),
@@ -278,7 +374,7 @@
 
     /* 清空瞬时效果（切场景 / 重开一局时调用；环境微粒保留） */
     function clear() {
-      parts = []; floats = []; rings = [];
+      parts = []; floats = []; rings = []; glows = []; flashes = [];
       shakeT = 0;
     }
 
@@ -309,6 +405,14 @@
         rings[i].age += dt;
         if (rings[i].age >= rings[i].life) rings.splice(i, 1);
       }
+      for (i = glows.length - 1; i >= 0; i--) {
+        glows[i].age += dt;
+        if (glows[i].age >= glows[i].life) glows.splice(i, 1);
+      }
+      for (i = flashes.length - 1; i >= 0; i--) {
+        flashes[i].age += dt;
+        if (flashes[i].age >= flashes[i].life) flashes.splice(i, 1);
+      }
       if (ambCfg) {
         var ax0 = ambCfg.x0 || 0, ay0 = ambCfg.y0 || 0;
         for (i = 0; i < motes.length; i++) {
@@ -336,9 +440,24 @@
       ctx.globalAlpha = 1;
     }
 
-    // ---- 绘制：前景层（环 → 粒子/彩纸 → 飘字，画在最上层） ----
+    // ---- 绘制：前景层（柔光 → 环 → 粒子/彩纸 → 全屏闪光 → 飘字，画在最上层） ----
     function drawFront(ctx) {
       var i, k;
+
+      if (glows.length) {
+        // lighter 叠加：光斑叠在亮色上更亮，才有「点亮」而不是「糊一层灰」
+        ctx.globalCompositeOperation = 'lighter';
+        for (i = 0; i < glows.length; i++) {
+          var gl = glows[i];
+          k = gl.age / gl.life;
+          var gr = gl.r0 + (gl.r1 - gl.r0) * easeOutCubic(k);
+          var spr = glowCache[gl.color];
+          if (!spr) { spr = glowSprite(gl.color, 32, 0.9); glowCache[gl.color] = spr; }
+          ctx.globalAlpha = gl.alpha * (1 - k);
+          ctx.drawImage(spr, gl.x - gr, gl.y - gr, gr * 2, gr * 2);
+        }
+        ctx.globalCompositeOperation = 'source-over';
+      }
 
       for (i = 0; i < rings.length; i++) {
         var r = rings[i];
@@ -375,6 +494,21 @@
         } else if (p.shape === 'heart') {
           pathHeart(ctx, p.x, p.y, s);
           ctx.fill();
+        } else if (p.shape === 'diamond') {
+          // 菱形纸屑：比 rect 更「宝石感」，配庆祝色板
+          ctx.save();
+          ctx.translate(p.x, p.y);
+          ctx.rotate(p.rot);
+          ctx.beginPath();
+          ctx.moveTo(0, -s); ctx.lineTo(s * 0.62, 0);
+          ctx.lineTo(0, s); ctx.lineTo(-s * 0.62, 0);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        } else if (p.shape === 'spark4') {
+          // 四角星：拾取瞬间的「叮」一下闪光
+          pathSpark4(ctx, p.x, p.y, s * (0.6 + 0.4 * (1 - k)));
+          ctx.fill();
         } else if (p.shape === 'spark') {
           // 速度方向拉出的短光线
           ctx.strokeStyle = p.color;
@@ -391,22 +525,51 @@
         }
       }
 
+      for (i = 0; i < flashes.length; i++) {
+        var fl = flashes[i];
+        k = fl.age / fl.life;
+        ctx.globalAlpha = fl.max * (1 - easeOutCubic(k));   // 立即到峰、缓出淡掉
+        ctx.fillStyle = fl.color;
+        ctx.fillRect(0, 0, viewW, viewH);
+      }
+
       if (floats.length) {
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.font = 'bold ' + Math.round(floats[0].size) + 'px "PingFang SC","Microsoft YaHei",sans-serif';
+        var prevSize = -1;
         for (i = 0; i < floats.length; i++) {
           var f = floats[i];
           k = f.age / f.life;
+          // font 字符串只在尺寸变化时重拼（同帧多数飘字同号，尽量少制造 GC 垃圾）
+          if (f.size !== prevSize) {
+            ctx.font = 'bold ' + Math.round(f.size) + 'px "PingFang SC","Microsoft YaHei",sans-serif';
+            prevSize = f.size;
+          }
           var fy = f.y - f.size * 1.7 * easeOutCubic(k);
           ctx.globalAlpha = k < 0.65 ? 1 : Math.max(0, 1 - (k - 0.65) / 0.35);
-          if (f.stroke) {
-            ctx.strokeStyle = 'rgba(0,0,0,0.55)';      // 深色描边：浅色字在亮背景上也看得清
-            ctx.lineWidth = Math.max(2, f.size * 0.14);
-            ctx.strokeText(f.text, f.x, fy);
+          // 弹出缩放：出现瞬间放大再回落（scale 变换实现，不重拼 font 字符串，避免 GC）
+          var pop = f.pop ? 1 + 0.45 * Math.max(0, 1 - k * 2.6) * Math.max(0, 1 - k * 2.6) : 1;
+          if (pop !== 1) {
+            ctx.save();
+            ctx.translate(f.x, fy);
+            ctx.scale(pop, pop);
+            if (f.stroke) {
+              ctx.strokeStyle = 'rgba(0,0,0,0.55)';      // 深色描边：浅色字在亮背景上也看得清
+              ctx.lineWidth = Math.max(2, f.size * 0.14);
+              ctx.strokeText(f.text, 0, 0);
+            }
+            ctx.fillStyle = f.color;
+            ctx.fillText(f.text, 0, 0);
+            ctx.restore();
+          } else {
+            if (f.stroke) {
+              ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+              ctx.lineWidth = Math.max(2, f.size * 0.14);
+              ctx.strokeText(f.text, f.x, fy);
+            }
+            ctx.fillStyle = f.color;
+            ctx.fillText(f.text, f.x, fy);
           }
-          ctx.fillStyle = f.color;
-          ctx.fillText(f.text, f.x, fy);
         }
       }
       ctx.globalAlpha = 1;
@@ -418,6 +581,10 @@
       drawFront: drawFront,
       burst: burst,
       confetti: confetti,
+      emit: emit,
+      glow: glow,
+      flash: flash,
+      setView: setView,
       ring: ring,
       float: floatText,
       setAmbient: setAmbient,
@@ -434,6 +601,7 @@
     vignette: vignette,
     pathStar: pathStar,
     pathHeart: pathHeart,
+    pathSpark4: pathSpark4,
     hexToRgb: hexToRgb,
     lcg: lcg,
     PALETTE: PALETTE
