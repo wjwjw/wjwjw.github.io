@@ -8,6 +8,11 @@
  *                                 地址 = localServer + "/h5-games/<folder>/<entry>"
  *       true （正式发布）       → 游戏从「GitHub Pages」加载
  *                                 地址 = remoteBase + "/h5-games/<folder>/<entry>"
+ *       ★ 页面以 https:// 打开时（GitHub Pages），浏览器会拦截 http:// 的
+ *         iframe（Mixed Content，游戏白屏）。此时启动器会自动切换为正式
+ *         资源，无需手动改这里；只有显式带 ?remote=0 / ?local=... 才保持
+ *         本地源（会被浏览器拦截，页面会弹提示）。
+ *         —— 自愈逻辑见 launcher.js，别在两边各写一套。
  *  2) games[].completed
  *       该游戏是否已完成。false → 菜单只展示占位「即将推出」，不可进入。
  *

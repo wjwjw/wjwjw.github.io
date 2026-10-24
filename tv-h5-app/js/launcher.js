@@ -16,6 +16,20 @@
   if (params.has("base")) cfg.remoteBase = params.get("base");
   if (params.has("local")) { cfg.useRemote = false; cfg.localServer = params.get("local"); }
 
+  // ---- 混合内容（Mixed Content）自愈 ----
+  // 页面以 HTTPS 打开时（如 GitHub Pages），浏览器会直接拦截 iframe 里的
+  // http:// 资源，游戏只会白屏。此时只要用户没有显式用 ?remote=0 / ?local=...
+  // 指定本地源，就自动切到正式资源，保证点开就能玩。
+  // 本地调试走 http:// 打开启动器，不受影响，仍是本地开发机模式。
+  var mixedContentWarn = false;
+  if (/^https:$/.test(location.protocol)) {
+    if (!params.has("remote") && !params.has("local")) {
+      cfg.useRemote = true;
+    } else if (!cfg.useRemote && /^http:/.test(cfg.localServer)) {
+      mixedContentWarn = true; // 显式强制的 http 本地源，仍会被浏览器拦截
+    }
+  }
+
   var menuEl = document.getElementById("menu");
   var preview = {
     icon: document.getElementById("pvIcon"),
@@ -265,4 +279,7 @@
   // ---- 启动 ----
   updateModeTag();
   renderMenu();
+  if (mixedContentWarn) {
+    showToast("HTTPS 页面无法加载 http:// 本地资源（混合内容），游戏将被浏览器拦截");
+  }
 })();
