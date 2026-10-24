@@ -39,6 +39,11 @@
   var spawnZ = -54;
   var despawnZ = 11;
   var ENT_Y = 0.95;
+  var decor = [];          // 两侧滚动光球（scrollWorld 统一驱动，见 buildLightOrbs）
+  var playerShadow = null; // 玩家假投影：独立对象，不随玩家缩放/倒下一起变形
+  var blinkTexCache = {};  // 「闭眼」面牌贴图缓存（与 texCache 分开，避免互串）
+  var playerBlinkT = 3;    // 距下次眨眼秒数
+  var playerBlinkLeft = 0; // 眨眼剩余闭合时长
 
   function initThree() {
     try {
@@ -83,31 +88,135 @@
       g.fillStyle = (i % 2 === 0) ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.06)";
       g.fillRect(i * lw, 0, lw, 512);
     }
-    // 车道分隔虚线
-    g.fillStyle = "rgba(150,170,210,0.45)";
+    // 车道分隔虚线：青色 + shadowBlur 辉光（贴图只画一次，老设备无每帧成本）
+    g.shadowColor = "rgba(120,220,255,0.9)";
+    g.shadowBlur = 12;
+    g.fillStyle = "rgba(150,170,210,0.5)";
     for (var d = 0; d < 2; d++) {
       var x = (d + 1) * lw;
       for (var y = 0; y < 512; y += 64) g.fillRect(x - 3, y, 6, 34);
+    }
+    // 赛道外沿实线：更亮的青光，勾出跑道边界
+    g.fillStyle = "rgba(120,220,255,0.55)";
+    g.fillRect(2, 0, 4, 512); g.fillRect(250, 0, 4, 512);
+    g.shadowBlur = 0;
+    // 前行箭头（chevron）：每车道一个、低透明度，强化「向前跑」的方向感
+    g.fillStyle = "rgba(255,255,255,0.05)";
+    for (var cy = 32; cy < 512; cy += 128) {
+      for (var l = 0; l < 3; l++) {
+        var cx = l * lw + lw / 2;
+        g.beginPath();
+        g.moveTo(cx - 24, cy); g.lineTo(cx + 8, cy + 22); g.lineTo(cx - 24, cy + 44);
+        g.lineTo(cx - 15, cy + 22); g.closePath(); g.fill();
+      }
     }
     groundTex = new THREE.CanvasTexture(c);
     groundTex.wrapS = THREE.RepeatWrapping;
     groundTex.wrapT = THREE.RepeatWrapping;
     groundTex.repeat.set(1, 9);
-    var geo = new THREE.PlaneGeometry(LANE_SP * 3, 78);
-    var mat = new THREE.MeshLambertMaterial({ map: groundTex });
-    groundMat = mat;
-    var ground = new THREE.Mesh(geo, mat);
+    var groundGeo = new THREE.PlaneGeometry(LANE_SP * 3, 78);
+    var groundMatLocal = new THREE.MeshLambertMaterial({ map: groundTex });
+    groundMat = groundMatLocal;
+    var ground = new THREE.Mesh(groundGeo, groundMatLocal);
     ground.rotation.x = -Math.PI / 2;
     ground.position.set(0, 0, -22);
     scene.add(ground);
 
-    // 两侧护栏（增强纵深）
-    var railMat = new THREE.MeshLambertMaterial({ color: 0x2c3650 });
+    // 两侧护栏 + 顶部 Neon 光带（MeshBasic 自发光色，给赛道镶一道青光边）
+    var railGeo = geo("rail", function () { return new THREE.BoxGeometry(0.3, 1.0, 78); });
+    var railMat = mat("rail", function () { return new THREE.MeshLambertMaterial({ color: 0x2c3650 }); });
+    var stripGeo = geo("rail-strip", function () { return new THREE.BoxGeometry(0.09, 0.05, 78); });
+    var stripMat = mat("rail-strip", function () { return new THREE.MeshBasicMaterial({ color: 0x54d8ff }); });
     for (var s = 0; s < 2; s++) {
-      var rg = new THREE.BoxGeometry(0.3, 1.0, 78);
-      var rail = new THREE.Mesh(rg, railMat);
-      rail.position.set((s === 0 ? -1 : 1) * (LANE_SP * 1.5 + 0.2), 0.5, -22);
+      var sx = (s === 0 ? -1 : 1) * (LANE_SP * 1.5 + 0.2);
+      var rail = new THREE.Mesh(railGeo, railMat);
+      rail.position.set(sx, 0.5, -22);
       scene.add(rail);
+      var strip = new THREE.Mesh(stripGeo, stripMat);
+      strip.position.set(sx, 1.03, -22);
+      scene.add(strip);
+    }
+
+    // 远景四件套：渐变天幕 / 星点 / 楼影 / 两侧光球。
+    // 纯色背景在 3D 里「一览无余」，有远景才有纵深——全部静态、一次建好。
+    buildSky();
+    buildStars();
+    buildSkyline();
+    buildLightOrbs();
+  }
+
+  // 天幕：竖向渐变（天顶 #05070c → 地平线辉光 → 线以下远处雾霭），
+  // 与 scene.background / fog 同色系，地面远端淡入时不露接缝
+  function buildSky() {
+    var c = document.createElement("canvas");
+    c.width = 8; c.height = 256;
+    var g = c.getContext("2d");
+    var grad = g.createLinearGradient(0, 0, 0, 256);
+    grad.addColorStop(0, "#05070c");
+    grad.addColorStop(0.45, "#0b0e14");
+    grad.addColorStop(0.6, "#1a2340");
+    grad.addColorStop(0.68, "#141b31");
+    grad.addColorStop(1, "#0d1322");
+    g.fillStyle = grad; g.fillRect(0, 0, 8, 256);
+    var plane = new THREE.Mesh(
+      new THREE.PlaneGeometry(460, 300),
+      new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), fog: false, depthWrite: false }));
+    plane.position.set(0, 30, -95);
+    scene.add(plane);
+  }
+
+  // 星点：Points 一次画完。fog:false 否则会被跑道雾气吞掉；
+  // sizeAttenuation:false 让星星不随距离缩放（本来就是「无穷远」）
+  function buildStars() {
+    var n = 240, arr = new Float32Array(n * 3);
+    for (var i = 0; i < n; i++) {
+      arr[i * 3] = (Math.random() - 0.5) * 340;
+      arr[i * 3 + 1] = 10 + Math.random() * 110;
+      arr[i * 3 + 2] = -42 - Math.random() * 52;
+    }
+    var bg = new THREE.BufferGeometry();
+    bg.setAttribute("position", new THREE.Float32BufferAttribute(arr, 3));
+    scene.add(new THREE.Points(bg, new THREE.PointsMaterial({
+      color: 0xcfe0ff, size: 2, sizeAttenuation: false,
+      transparent: true, opacity: 0.85, fog: false, depthWrite: false
+    })));
+  }
+
+  // 楼影：两侧远景剪影，亮窗走同一张立面贴图（clone 后各自 repeat）。
+  // fog:false —— 楼在雾距之外，不吃雾才能保持剪影的深色
+  function buildSkyline() {
+    var tex = buildingTexture();
+    var unitBox = new THREE.BoxGeometry(1, 1, 1);
+    for (var i = 0; i < 12; i++) {
+      var side = (i % 2 === 0) ? -1 : 1;
+      var w = 5 + Math.random() * 7;
+      var h = 8 + Math.random() * 26;
+      var t = tex.clone();
+      t.needsUpdate = true;
+      t.wrapS = THREE.RepeatWrapping; t.wrapT = THREE.RepeatWrapping;
+      t.repeat.set(Math.max(1, Math.round(w / 4)), Math.max(1, Math.round(h / 5)));
+      var b = new THREE.Mesh(unitBox,
+        new THREE.MeshBasicMaterial({ map: t, color: 0x8f98bd, fog: false }));
+      b.scale.set(w, h, 5 + Math.random() * 5);
+      b.position.set(side * (17 + Math.random() * 32), h / 2 - 3, -68 - Math.random() * 22);
+      scene.add(b);
+    }
+  }
+
+  // 两侧滚动光球：每帧只改 position.z 并循环，是最便宜的「速度感」来源
+  // （地面贴图 offset 是一层视差，光球贴脸过是第二层——近景糊一下才觉得快）
+  function buildLightOrbs() {
+    var n = 10, span = 76;
+    for (var i = 0; i < n; i++) {
+      for (var s = 0; s < 2; s++) {
+        var orb = glowSprite((i + s) % 2 === 0 ? 0x59e0ff : 0x7a5cff,
+          1 + Math.random() * 0.5, 0.5 + Math.random() * 0.25);
+        orb.position.set((s === 0 ? -1 : 1) * (LANE_SP * 1.5 + 1.1),
+          2.4 + Math.random() * 1.2,
+          14 - (i + (s === 0 ? 0 : 0.5)) * (span / n));
+        scene.add(orb);
+        decor.push(orb);
+      }
     }
   }
 
@@ -202,10 +311,201 @@
     g.closePath();
   }
 
+  // ---------- 资源缓存 ----------
+  // 实体是高频生成的（正常约每秒 1~2 行），几何/材质/贴图一律只建一次、全场共享。
+  // ⚠️ 缓存材质是「只读共享」：任何按实例改色的需求必须先 clone()，否则同值实体一起变色。
+  var geoCache = {};
+  var matCache = {};
+  function geo(key, factory) {
+    var g = geoCache[key];
+    if (!g) { g = factory(); geoCache[key] = g; }
+    return g;
+  }
+  function mat(key, factory) {
+    var m = matCache[key];
+    if (!m) { m = factory(); matCache[key] = m; }
+    return m;
+  }
+
+  // 数值 → 色相：指数取色（2→0°, 4→38°, 8→76°…）。同值永远同色，合并后「长大变色」可感知。
+  function valueHue(v) { return (Math.round(Math.log(v) / Math.log(2)) * 38) % 360; }
+  function valueColorA(v, a) { return "hsla(" + valueHue(v) + ",72%,56%," + a + ")"; }
+
+  // "#rrggbb" → "rgba(...)"（Canvas 渐变要带透明度）
+  function withAlpha(hex, a) {
+    var h = hex.charAt(0) === "#" ? hex.slice(1) : hex;
+    if (h.length === 3) h = h.charAt(0) + h.charAt(0) + h.charAt(1) + h.charAt(1) + h.charAt(2) + h.charAt(2);
+    var n = parseInt(h, 16);
+    return "rgba(" + ((n >> 16) & 255) + "," + ((n >> 8) & 255) + "," + (n & 255) + "," + a + ")";
+  }
+  // THREE 色值 → {r,g,b}（0~255，画布渐变用）
+  function hexRGB(color) {
+    var col = new THREE.Color(color);
+    return { r: Math.round(col.r * 255), g: Math.round(col.g * 255), b: Math.round(col.b * 255) };
+  }
+
+  // 圆角盒：把 BoxGeometry 顶点按「内盒 + 半径」外推（面心不动、棱角收圆），
+  // 再重算法线。比 ExtrudeGeometry 的 bevel 行为可靠，立方体模型立刻「玩具化」。
+  function roundedBoxGeo(w, h, d, r, seg) {
+    var s = seg || 4;
+    var g = new THREE.BoxGeometry(w, h, d, s, s, s);
+    var pos = g.attributes.position;
+    var hx = w / 2, hy = h / 2, hz = d / 2;
+    var rr = Math.min(r, hx, hy, hz);
+    for (var i = 0; i < pos.count; i++) {
+      var x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+      var cx = Math.max(-hx + rr, Math.min(hx - rr, x));
+      var cy = Math.max(-hy + rr, Math.min(hy - rr, y));
+      var cz = Math.max(-hz + rr, Math.min(hz - rr, z));
+      var dx = x - cx, dy = y - cy, dz = z - cz;
+      var len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      if (len > 0.0001) {
+        var k = rr / len;
+        pos.setXYZ(i, cx + dx * k, cy + dy * k, cz + dz * k);
+      }
+    }
+    pos.needsUpdate = true;
+    g.computeVertexNormals();
+    return g;
+  }
+
+  // 描边（inverted hull）：同几何体放大一档 + BackSide 单色，给模型一圈「贴纸感」亮边。
+  // 比 EdgesGeometry 便宜（不建线段缓冲），曲面也有一致轮廓。
+  // 注意：返回的 mesh 要加到「与源 mesh 相同的父节点」，position 已按源 mesh 复制。
+  function outlineOf(mesh, color, scale) {
+    var o = new THREE.Mesh(mesh.geometry, mat("outline" + color, function () {
+      return new THREE.MeshBasicMaterial({ color: color, side: THREE.BackSide });
+    }));
+    o.position.copy(mesh.position);
+    o.scale.setScalar(scale || 1.06);
+    return o;
+  }
+
+  // 径向柔光贴图（按色缓存，一次生成）：Sprite + Additive 做「自发光」光晕
+  var glowTexCache = {};
+  function glowTexture(color) {
+    var key = "g" + color;
+    if (glowTexCache[key]) return glowTexCache[key];
+    var rgb = hexRGB(color);
+    var c = document.createElement("canvas");
+    c.width = c.height = 128;
+    var g = c.getContext("2d");
+    var grad = g.createRadialGradient(64, 64, 2, 64, 64, 62);
+    grad.addColorStop(0, "rgba(255,255,255,0.95)");
+    grad.addColorStop(0.22, "rgba(" + rgb.r + "," + rgb.g + "," + rgb.b + ",0.55)");
+    grad.addColorStop(1, "rgba(" + rgb.r + "," + rgb.g + "," + rgb.b + ",0)");
+    g.fillStyle = grad; g.fillRect(0, 0, 128, 128);
+    var t = new THREE.CanvasTexture(c);
+    glowTexCache[key] = t;
+    return t;
+  }
+  function glowSprite(color, scale, opacity) {
+    var op = opacity === undefined ? 0.8 : opacity;
+    var sp = new THREE.Sprite(mat("glow" + color + "_" + op, function () {
+      return new THREE.SpriteMaterial({
+        map: glowTexture(color), transparent: true, opacity: op,
+        blending: THREE.AdditiveBlending, depthWrite: false
+      });
+    }));
+    sp.scale.set(scale || 2, scale || 2, 1);
+    return sp;
+  }
+
+  // 假投影：径向黑斑贴在实体脚下。深色跑道上「落地感」几乎全靠它，
+  // 比真阴影（shadowMap）便宜一个数量级，老设备无感。
+  var shadowTex = null;
+  function shadowSprite(scale, opacity) {
+    if (!shadowTex) {
+      var c = document.createElement("canvas");
+      c.width = c.height = 128;
+      var g = c.getContext("2d");
+      var grad = g.createRadialGradient(64, 64, 2, 64, 64, 62);
+      grad.addColorStop(0, "rgba(0,0,0,0.6)");
+      grad.addColorStop(0.55, "rgba(0,0,0,0.25)");
+      grad.addColorStop(1, "rgba(0,0,0,0)");
+      g.fillStyle = grad; g.fillRect(0, 0, 128, 128);
+      shadowTex = new THREE.CanvasTexture(c);
+    }
+    var op = opacity === undefined ? 0.85 : opacity;
+    var sp = new THREE.Sprite(mat("shadow" + op, function () {
+      return new THREE.SpriteMaterial({ map: shadowTex, transparent: true, opacity: op, depthWrite: false });
+    }));
+    var sz = scale || 1.6;
+    sp.scale.set(sz, sz * 0.55, 1);
+    return sp;
+  }
+
+  // 传送门漩涡盘：双螺旋臂 + 亮核（additive 混合，像「门在吸」）
+  var swirlTex = null;
+  function swirlTexture() {
+    if (swirlTex) return swirlTex;
+    var c = document.createElement("canvas");
+    c.width = c.height = 256;
+    var g = c.getContext("2d");
+    g.clearRect(0, 0, 256, 256);
+    g.translate(128, 128);
+    g.lineCap = "round";
+    for (var arm = 0; arm < 2; arm++) {
+      g.save();
+      g.rotate(arm * Math.PI);
+      var grad = g.createLinearGradient(0, 0, 108, 0);
+      grad.addColorStop(0, "rgba(170,242,255,0.9)");
+      grad.addColorStop(1, "rgba(122,92,255,0)");
+      g.strokeStyle = grad;
+      g.lineWidth = 15;
+      g.beginPath();
+      for (var t = 0; t <= 1.001; t += 0.04) {
+        var ang = t * 2.6, rad = 8 + t * 100;
+        var px = Math.cos(ang) * rad, py = Math.sin(ang) * rad;
+        if (t === 0) g.moveTo(px, py); else g.lineTo(px, py);
+      }
+      g.stroke();
+      g.restore();
+    }
+    var core = g.createRadialGradient(0, 0, 2, 0, 0, 42);
+    core.addColorStop(0, "rgba(255,255,255,0.95)");
+    core.addColorStop(1, "rgba(255,255,255,0)");
+    g.fillStyle = core;
+    g.fillRect(-128, -128, 256, 256);
+    swirlTex = new THREE.CanvasTexture(c);
+    return swirlTex;
+  }
+
+  // 楼体立面（见 buildSkyline）：暗底 + 零星亮窗，一次性生成
+  function buildingTexture() {
+    var c = document.createElement("canvas");
+    c.width = 64; c.height = 128;
+    var g = c.getContext("2d");
+    g.fillStyle = "#18203a"; g.fillRect(0, 0, 64, 128);
+    for (var y = 6; y < 122; y += 12) {
+      for (var x = 6; x < 58; x += 12) {
+        g.fillStyle = (Math.random() < 0.32) ? "rgba(255,214,130,0.9)" : "rgba(96,110,158,0.16)";
+        g.fillRect(x, y, 7, 8);
+      }
+    }
+    var t = new THREE.CanvasTexture(c);
+    t.wrapS = THREE.RepeatWrapping; t.wrapT = THREE.RepeatWrapping;
+    return t;
+  }
+
+  // 世界滚动统一入口：地面纹理 offset + 两侧光球循环。
+  // 主循环、死亡演出、通关演出共用——否则「减速停下」时地面停了光球还在飞，很出戏。
+  function scrollWorld(dz) {
+    if (groundTex) groundTex.offset.y -= dz * 0.018;
+    for (var i = 0; i < decor.length; i++) {
+      var o = decor[i];
+      o.position.z += dz;
+      if (o.position.z > 14) o.position.z -= 76;
+    }
+  }
+
   // 数字贴图缓存（CanvasTexture，不用 emoji）
+  // 贴图四层：数值色光晕 → 脸（眼/微笑）→ 彩色描边数字 → 白填充。
+  // 数字块全是「活物」，撞上去有生命感；blink=true 画闭眼（玩家专用，见 setPlayerFace）。
   var texCache = {};
-  function numTexture(value) {
-    if (texCache[value]) return texCache[value];
+  function numTexture(value, blink) {
+    var cache = blink ? blinkTexCache : texCache;
+    if (cache[value]) return cache[value];
     var c = document.createElement("canvas");
     c.width = c.height = 256;
     var g = c.getContext("2d");
@@ -220,22 +520,60 @@
     if (w > maxW) { fs = Math.max(42, Math.floor(fs * maxW / w)); g.font = fontOf(fs); }
     g.textAlign = "center"; g.textBaseline = "middle";
     g.lineJoin = "round";
-    // 不要背板：彩色描边（保留数值大小的颜色身份）+ 白色填充，深色背景上清晰可见
+    // ① 光晕：数值色径向渐变，像数字块在自发光（是光不是背板，深色跑道也醒目）
+    var halo = g.createRadialGradient(128, 128, 8, 128, 128, 120);
+    halo.addColorStop(0, valueColorA(value, 0.5));
+    halo.addColorStop(0.45, valueColorA(value, 0.18));
+    halo.addColorStop(1, valueColorA(value, 0));
+    g.fillStyle = halo;
+    g.fillRect(0, 0, 256, 256);
+    // ② 脸：眼睛在数字上方、微笑在下方（闭眼态两眼各一道横线）
+    if (blink) {
+      g.strokeStyle = "#1c2230";
+      g.lineWidth = 7;
+      g.beginPath();
+      g.moveTo(74, 52); g.lineTo(102, 52);
+      g.moveTo(154, 52); g.lineTo(182, 52);
+      g.stroke();
+    } else {
+      drawEye(g, 88, 52);
+      drawEye(g, 168, 52);
+    }
+    // ③ 数字本体：彩色描边（保留数值大小的颜色身份）+ 白色填充，深色背景上清晰可见
     g.lineWidth = Math.max(8, Math.round(fs * 0.15));
     g.strokeStyle = valueColor(value);
-    g.strokeText(txt, 128, 138);
+    g.strokeText(txt, 128, 146);
     g.fillStyle = "#fff";
-    g.fillText(txt, 128, 138);
+    g.fillText(txt, 128, 146);
+    // ④ 微笑：数字底边下一道弧，「脸」才完整
+    g.strokeStyle = "rgba(28,34,48,0.85)";
+    g.lineWidth = 6;
+    g.beginPath(); g.arc(128, 202, 20, 0.15 * Math.PI, 0.85 * Math.PI); g.stroke();
     var t = new THREE.CanvasTexture(c);
     if (renderer) t.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
-    texCache[value] = t;
+    cache[value] = t;
     return t;
+  }
+  // 一只眼：白底 + 深色瞳孔 + 高光点（远看也读得出是「脸」）
+  function drawEye(g, x, y) {
+    g.fillStyle = "#ffffff";
+    g.beginPath(); g.ellipse(x, y, 15, 18, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = "#1c2230";
+    g.beginPath(); g.arc(x + 2, y + 2, 7.5, 0, Math.PI * 2); g.fill();
+    g.fillStyle = "rgba(255,255,255,0.9)";
+    g.beginPath(); g.arc(x - 2, y - 4, 2.6, 0, Math.PI * 2); g.fill();
   }
 
   function makeLabelSprite(text, color, size) {
     var c = document.createElement("canvas");
     c.width = c.height = 256;
     var g = c.getContext("2d");
+    // 底部柔光：与数字块同思路，标签（X/蕉/门/小）在暗处也读得出
+    var halo = g.createRadialGradient(128, 128, 8, 128, 128, 116);
+    halo.addColorStop(0, withAlpha(color, 0.4));
+    halo.addColorStop(1, withAlpha(color, 0));
+    g.fillStyle = halo;
+    g.fillRect(0, 0, 256, 256);
     g.font = "bold 200px system-ui,sans-serif";
     g.textAlign = "center"; g.textBaseline = "middle";
     g.lineJoin = "round";
@@ -254,154 +592,309 @@
   }
 
   // ---------- 玩家 ----------
+  // 结构：grp（站位/光环）→ body（跑动时微颠）→ 机身/亮边/面牌/天线/腿
   var player = null;
   function buildPlayer() {
     var grp = new THREE.Group();
+    var bodyGrp = new THREE.Group();
+    // 机身：圆角盒（BoxGeometry 顶点球面化，见 roundedBoxGeo）+ 白色亮边
+    var boxGeo = geo("player-box", function () { return roundedBoxGeo(1.7, 1.7, 1.7, 0.34, 4); });
     var boxMat = new THREE.MeshLambertMaterial({ color: 0x4c8bf5 });
-    var box = new THREE.Mesh(new THREE.BoxGeometry(1.7, 1.7, 1.7), boxMat);
+    var box = new THREE.Mesh(boxGeo, boxMat);
     box.position.y = ENT_Y;
-    grp.add(box);
-    var sprite = makeNumSprite(2);
-    sprite.position.set(0, ENT_Y, 1.05);
-    sprite.scale.set(1.8, 1.8, 1.8);
-    grp.add(sprite);
+    bodyGrp.add(box);
+    bodyGrp.add(outlineOf(box, 0xffffff, 1.05));
+    // 头顶天线：末端小球颜色 = 当前数值色，合并瞬间「唰」地变色（refreshPlayerVisual）
+    var antenna = new THREE.Mesh(geo("player-antenna", function () { return new THREE.CylinderGeometry(0.03, 0.03, 0.5, 5); }),
+      mat("player-antenna", function () { return new THREE.MeshLambertMaterial({ color: 0xdfe9ff }); }));
+    antenna.position.y = ENT_Y + 1.08;
+    bodyGrp.add(antenna);
+    var tipMat = new THREE.MeshBasicMaterial({ color: 0xffd93d });
+    var tip = new THREE.Mesh(geo("player-tip", function () { return new THREE.SphereGeometry(0.13, 10, 8); }), tipMat);
+    tip.position.y = ENT_Y + 1.38;
+    bodyGrp.add(tip);
+    // 小短腿：pivot 已平移到髋部（几何体下移），rotation.x 摆动即跑动
+    var footGeo = geo("player-foot", function () {
+      var fg = roundedBoxGeo(0.44, 0.5, 0.62, 0.16, 2);
+      fg.translate(0, -0.25, 0);
+      return fg;
+    });
+    var feet = [];
+    for (var f = 0; f < 2; f++) {
+      var foot = new THREE.Mesh(footGeo, mat("player-foot", function () {
+        return new THREE.MeshLambertMaterial({ color: 0x2c5fd0 });
+      }));
+      foot.position.set(f === 0 ? -0.44 : 0.44, 0.42, 0.12);
+      bodyGrp.add(foot);
+      feet.push(foot);
+    }
+    // 数字面牌：dedicated=true —— 玩家要单独换「闭眼」贴图，不能和场上数字块共享材质
+    var sprite = makeNumSprite(2, true);
+    sprite.position.set(0, ENT_Y, 0.9);
+    bodyGrp.add(sprite);
+    grp.add(bodyGrp);
     // 护盾 / 无敌光环
     var ringMat = new THREE.MeshBasicMaterial({ color: 0x36c6d3, transparent: true, opacity: 0.8 });
     var ring = new THREE.Mesh(new THREE.TorusGeometry(1.4, 0.12, 8, 28), ringMat);
     ring.position.y = ENT_Y; ring.rotation.x = Math.PI / 2;
     ring.visible = false;
     grp.add(ring);
+    // 假投影：独立场景对象（不随玩家缩小/倒下变形），位置每帧在 update 里跟随
+    var sh = shadowSprite(2.1, 0.9);
+    sh.position.set(0, 0.03, playerZ);
+    sh.visible = false; // 菜单态不显示，startGame 开场再亮出
+    scene.add(sh);
+    playerShadow = sh;
     grp.visible = false;
     scene.add(grp);
     player = {
-      lane: 1, x: laneX[1], value: 2, mesh: grp, box: box, boxMat: boxMat,
-      sprite: sprite, ring: ring, ringMat: ringMat
+      lane: 1, x: laneX[1], value: 2, mesh: grp, body: bodyGrp, box: box, boxMat: boxMat,
+      sprite: sprite, ring: ring, ringMat: ringMat, tip: tip, tipMat: tipMat, feet: feet
     };
   }
-  function makeNumSprite(value) {
-    var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: numTexture(value), transparent: true, depthWrite: false, depthTest: false }));
+  // dedicated=true 时新建材质（玩家专用）；否则按数值缓存共享（数字块用）
+  function makeNumSprite(value, dedicated) {
+    var m;
+    if (dedicated) {
+      m = new THREE.SpriteMaterial({ map: numTexture(value), transparent: true, depthWrite: false, depthTest: false });
+    } else {
+      m = mat("numspr" + value, function () {
+        return new THREE.SpriteMaterial({ map: numTexture(value), transparent: true, depthWrite: false, depthTest: false });
+      });
+    }
+    var sp = new THREE.Sprite(m);
     sp.scale.set(1.75, 1.75, 1.75);
     return sp;
   }
+  // 眨眼面牌切换（贴图级，无额外 draw call）
+  function setPlayerFace(closed) {
+    var t = closed ? numTexture(player.value, true) : numTexture(player.value);
+    if (player.sprite.material.map !== t) {
+      player.sprite.material.map = t;
+      player.sprite.material.needsUpdate = true;
+    }
+  }
   function refreshPlayerVisual() {
     player.boxMat.color.set(valueColor(player.value));
-    player.sprite.material.map = numTexture(player.value);
-    player.sprite.material.needsUpdate = true;
+    player.tipMat.color.set(valueColor(player.value)); // 天线尖端跟着数值变色
+    setPlayerFace(false);
+    playerBlinkT = 2 + Math.random() * 2; // 刚合并完，缓一缓再眨
   }
 
   // ---------- 实体工厂 ----------
+  // 统一结构：grp（站位 + 假投影，钉在地面）→ fly（悬浮呼吸，自身不转）→ 零件（各自旋转）。
+  // 这样面牌/标签不跟模型乱转、假投影不随呼吸漂、碰撞判定（lane + z 窗口）完全不受影响。
   function makeNum(lane, value) {
     var grp = new THREE.Group();
-    var mat = new THREE.MeshLambertMaterial({ color: new THREE.Color(valueColor(value)) });
-    var box = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.5, 1.5), mat);
+    var fly = new THREE.Group();
+    var boxGeo = geo("num-box", function () { return roundedBoxGeo(1.5, 1.5, 1.5, 0.3, 4); });
+    var col = new THREE.Color(valueColor(value));
+    var box = new THREE.Mesh(boxGeo, mat("num" + value, function () {
+      // emissive 取同色 28%：数字块「自带一点光」，和贴图里的光晕方向一致
+      return new THREE.MeshLambertMaterial({ color: col.clone(), emissive: col.clone().multiplyScalar(0.28) });
+    }));
     box.position.y = ENT_Y;
-    grp.add(box);
+    fly.add(box);
+    fly.add(outlineOf(box, 0xffffff, 1.06));
     var sp = makeNumSprite(value);
-    sp.position.set(0, ENT_Y, 0.8);
-    grp.add(sp);
+    sp.position.set(0, ENT_Y, 0.82);
+    fly.add(sp);
+    grp.add(shadowSprite(1.5, 0.8));
+    grp.add(fly);
     grp.position.set(laneX[lane], 0, spawnZ);
     scene.add(grp);
-    return { type: "num", lane: lane, value: value, z: spawnZ, x: laneX[lane], mesh: grp, model: box, hit: false, dead: false, spin: 0 };
+    return { type: "num", lane: lane, value: value, z: spawnZ, x: laneX[lane], mesh: grp, model: box, fly: fly, hit: false, dead: false, spin: 0 };
   }
   function makeBomb(lane) {
     var grp = new THREE.Group();
-    var ball = new THREE.Mesh(new THREE.IcosahedronGeometry(0.9, 0), new THREE.MeshLambertMaterial({ color: 0x2a2a33 }));
+    var fly = new THREE.Group();
+    // 弹体：油亮黑球（Phong 高光）+ 金属箍 + 弯引线 + 末端火花（火花闪烁见 update）
+    var ball = new THREE.Mesh(geo("bomb-ball", function () { return new THREE.SphereGeometry(0.82, 18, 14); }),
+      mat("bomb-ball", function () {
+        // 深灰偏亮一档：纯黑在暗色跑道上只剩一个红 X，抬亮点才读得出「球」
+        return new THREE.MeshPhongMaterial({ color: 0x353542, shininess: 90, specular: 0x666677 });
+      }));
     ball.position.y = ENT_Y;
-    grp.add(ball);
+    fly.add(ball);
+    var band = new THREE.Mesh(geo("bomb-band", function () { return new THREE.TorusGeometry(0.84, 0.09, 8, 22); }),
+      mat("bomb-band", function () {
+        return new THREE.MeshPhongMaterial({ color: 0x8e2f23, shininess: 60, specular: 0x997755 });
+      }));
+    band.position.y = ENT_Y; band.rotation.x = Math.PI / 2;
+    fly.add(band);
+    var fuse = new THREE.Mesh(geo("bomb-fuse", function () {
+      // 引线是条弯管（CatmullRom），从弹顶拐出去
+      var curve = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(0, ENT_Y + 0.7, 0),
+        new THREE.Vector3(0.24, ENT_Y + 1.05, 0.1),
+        new THREE.Vector3(0.55, ENT_Y + 1.12, 0.02),
+        new THREE.Vector3(0.68, ENT_Y + 1.42, 0.12)
+      ]);
+      return new THREE.TubeGeometry(curve, 16, 0.05, 6, false);
+    }), mat("bomb-fuse", function () { return new THREE.MeshLambertMaterial({ color: 0x6b4a1f }); }));
+    fly.add(fuse);
+    var spark = glowSprite(0xffb03a, 0.55, 0.95);
+    spark.position.set(0.68, ENT_Y + 1.42, 0.12);
+    fly.add(spark);
     var sp = makeLabelSprite("X", "#ff5d5d", 1.6);
-    sp.position.set(0, ENT_Y, 0.95);
-    grp.add(sp);
+    sp.position.set(0, ENT_Y, 0.86);
+    fly.add(sp);
+    grp.add(shadowSprite(1.4, 0.8));
+    grp.add(fly);
     grp.position.set(laneX[lane], 0, spawnZ);
     scene.add(grp);
-    return { type: "bomb", lane: lane, z: spawnZ, x: laneX[lane], mesh: grp, model: ball, hit: false, dead: false, spin: Math.random() * 6 };
+    return { type: "bomb", lane: lane, z: spawnZ, x: laneX[lane], mesh: grp, model: ball, fly: fly, spark: spark, hit: false, dead: false, spin: Math.random() * 6 };
   }
   function makeBanana(lane) {
     var grp = new THREE.Group();
-    // body 作为旋转体（弯月+果柄+尖），标签单独挂在 grp 上不跟着转
+    var fly = new THREE.Group();
+    // body 作为旋转体（弯月+果柄+熟蒂），标签挂 fly 上不跟着晃
     var body = new THREE.Group();
-    // 弯月形曲线（XY 平面）：两端上翘、中段下垂，比圆环弧更像真香蕉
-    var curve = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(-0.8, 0.42, 0),
-      new THREE.Vector3(-0.42, -0.26, 0),
-      new THREE.Vector3(0.0, -0.5, 0),
-      new THREE.Vector3(0.42, -0.26, 0),
-      new THREE.Vector3(0.8, 0.42, 0)
-    ]);
-    var geo = new THREE.TubeGeometry(curve, 32, 0.21, 12, false);
-    var mat = new THREE.MeshLambertMaterial({ color: 0xf6d23a });
-    var tube = new THREE.Mesh(geo, mat);
+    var tube = new THREE.Mesh(geo("banana-tube", function () {
+      // 弯月形曲线（XY 平面）：两端上翘、中段下垂，比圆环弧更像真香蕉
+      var curve = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(-0.8, 0.42, 0),
+        new THREE.Vector3(-0.42, -0.26, 0),
+        new THREE.Vector3(0.0, -0.5, 0),
+        new THREE.Vector3(0.42, -0.26, 0),
+        new THREE.Vector3(0.8, 0.42, 0)
+      ]);
+      return new THREE.TubeGeometry(curve, 32, 0.21, 12, false);
+    }), mat("banana-tube", function () {
+      // Phong + 微自发光：蕉皮油亮，暗处也黄得醒目
+      return new THREE.MeshPhongMaterial({ color: 0xf6d23a, shininess: 60, specular: 0xffeeaa, emissive: 0x2a2405 });
+    }));
     body.add(tube);
     // 棕色果柄（一头）
-    var stem = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.085, 0.32, 6),
-      new THREE.MeshLambertMaterial({ color: 0x6b4a1f }));
+    var stem = new THREE.Mesh(geo("banana-stem", function () { return new THREE.CylinderGeometry(0.05, 0.085, 0.32, 6); }),
+      mat("banana-stem", function () { return new THREE.MeshLambertMaterial({ color: 0x6b4a1f }); }));
     stem.position.set(-0.8, 0.6, 0); stem.rotation.z = 0.55;
     body.add(stem);
     // 另一头的深色熟蒂尖
-    var tip = new THREE.Mesh(new THREE.SphereGeometry(0.07, 7, 6),
-      new THREE.MeshLambertMaterial({ color: 0x4a3414 }));
-    tip.position.set(0.8, 0.42, 0);
-    body.add(tip);
+    var btip = new THREE.Mesh(geo("banana-tip", function () { return new THREE.SphereGeometry(0.07, 7, 6); }),
+      mat("banana-tip", function () { return new THREE.MeshLambertMaterial({ color: 0x4a3414 }); }));
+    btip.position.set(0.8, 0.42, 0);
+    body.add(btip);
     body.position.y = ENT_Y;
-    grp.add(body);
+    fly.add(body);
     var tag = makeLabelSprite("蕉", "#e0b400", 1.05);
     tag.position.set(0, ENT_Y + 1.25, 0);
-    grp.add(tag);
+    fly.add(tag);
+    grp.add(shadowSprite(1.5, 0.8));
+    grp.add(fly);
     grp.position.set(laneX[lane], 0, spawnZ);
     scene.add(grp);
-    return { type: "banana", lane: lane, z: spawnZ, x: laneX[lane], mesh: grp, model: body, hit: false, dead: false, spin: 0 };
+    return { type: "banana", lane: lane, z: spawnZ, x: laneX[lane], mesh: grp, model: body, fly: fly, hit: false, dead: false, spin: 0 };
   }
   function makePortal(lane) {
     var grp = new THREE.Group();
+    var fly = new THREE.Group();
     var pg = new THREE.Group();
-    var ring = new THREE.Mesh(new THREE.TorusGeometry(1.0, 0.18, 10, 28),
-      new THREE.MeshBasicMaterial({ color: 0x59e0ff }));
-    pg.add(ring);
-    var disc = new THREE.Mesh(new THREE.CircleGeometry(0.92, 24),
-      new THREE.MeshBasicMaterial({ color: 0x7a5cff, transparent: true, opacity: 0.45 }));
+    // 三圈异色环 + 漩涡盘 + 大光晕；内外环差速自转（e.rings 在 update 里驱动）
+    var r1 = new THREE.Mesh(geo("portal-r1", function () { return new THREE.TorusGeometry(1.0, 0.16, 10, 30); }),
+      mat("portal-r1", function () { return new THREE.MeshBasicMaterial({ color: 0x59e0ff }); }));
+    var r2 = new THREE.Mesh(geo("portal-r2", function () { return new THREE.TorusGeometry(0.72, 0.12, 10, 26); }),
+      mat("portal-r2", function () { return new THREE.MeshBasicMaterial({ color: 0x7a5cff }); }));
+    var r3 = new THREE.Mesh(geo("portal-r3", function () { return new THREE.TorusGeometry(0.46, 0.09, 8, 22); }),
+      mat("portal-r3", function () { return new THREE.MeshBasicMaterial({ color: 0xffffff }); }));
+    pg.add(r1); pg.add(r2); pg.add(r3);
+    var disc = new THREE.Mesh(geo("portal-disc", function () { return new THREE.CircleGeometry(0.68, 28); }),
+      new THREE.MeshBasicMaterial({
+        map: swirlTexture(), transparent: true, opacity: 0.9,
+        blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide
+      }));
     pg.add(disc);
     pg.position.y = 1.5; // 把旋转中心抬到门心，绕自身轴自转而非绕底部摆动
-    grp.add(pg);
+    fly.add(pg);
+    var halo = glowSprite(0x59e0ff, 3.2, 0.45);
+    halo.position.y = 1.5;
+    fly.add(halo);
     var tag = makeLabelSprite("门", "#1fa8c8", 1.05);
     tag.position.set(0, 2.7, 0);
-    grp.add(tag);
+    fly.add(tag);
+    grp.add(shadowSprite(1.8, 0.7));
+    grp.add(fly);
     grp.position.set(laneX[lane], 0, spawnZ);
     scene.add(grp);
-    return { type: "portal", lane: lane, z: spawnZ, x: laneX[lane], mesh: grp, model: pg, hit: false, dead: false, spin: 0 };
+    return {
+      type: "portal", lane: lane, z: spawnZ, x: laneX[lane], mesh: grp, model: pg, fly: fly,
+      rings: [{ m: r2, sp: -1.6 }, { m: r3, sp: 2.4 }, { m: disc, sp: 1.1 }],
+      hit: false, dead: false, spin: 0
+    };
   }
   function makeShrink(lane) {
     var grp = new THREE.Group();
+    var fly = new THREE.Group();
     var sg = new THREE.Group();
-    var body = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.55, 1.1, 12),
-      new THREE.MeshLambertMaterial({ color: 0x3ad17a }));
-    body.position.y = ENT_Y - 0.1;
-    sg.add(body);
-    var top = new THREE.Mesh(new THREE.SphereGeometry(0.32, 12, 10),
-      new THREE.MeshLambertMaterial({ color: 0xbff5d6 }));
-    top.position.y = ENT_Y + 0.55;
-    sg.add(top);
-    grp.add(sg);
+    // 瓶身：LatheGeometry 旋转成型（药水瓶轮廓），半透明绿玻璃
+    var bottle = new THREE.Mesh(geo("shrink-bottle", function () {
+      var profile = [[0, 0], [0.3, 0], [0.33, 0.08], [0.36, 0.3], [0.3, 0.55], [0.15, 0.72], [0.14, 0.86], [0.19, 0.92], [0.19, 1.02], [0, 1.02]];
+      var pts = [];
+      for (var i = 0; i < profile.length; i++) pts.push(new THREE.Vector2(profile[i][0], profile[i][1]));
+      return new THREE.LatheGeometry(pts, 18);
+    }), new THREE.MeshPhongMaterial({
+      color: 0x2fbf7a, transparent: true, opacity: 0.85, shininess: 80, specular: 0xffffff, side: THREE.DoubleSide
+    }));
+    bottle.position.y = 0.2;
+    sg.add(bottle);
+    // 液面亮环 + 木塞
+    var liquid = new THREE.Mesh(geo("shrink-liquid", function () { return new THREE.CylinderGeometry(0.3, 0.31, 0.34, 16); }),
+      mat("shrink-liquid", function () { return new THREE.MeshBasicMaterial({ color: 0x8ff5c0 }); }));
+    liquid.position.y = 0.5;
+    sg.add(liquid);
+    var cork = new THREE.Mesh(geo("shrink-cork", function () { return new THREE.CylinderGeometry(0.16, 0.18, 0.16, 10); }),
+      mat("shrink-cork", function () { return new THREE.MeshLambertMaterial({ color: 0x9a6b3a }); }));
+    cork.position.y = 1.3;
+    sg.add(cork);
+    // 两颗上升气泡（y 在 update 里驱动）
+    var bubbles = [];
+    for (var b = 0; b < 2; b++) {
+      var bub = new THREE.Mesh(geo("shrink-bubble", function () { return new THREE.SphereGeometry(0.055, 8, 6); }),
+        mat("shrink-bubble", function () {
+          return new THREE.MeshBasicMaterial({ color: 0xd6ffe9, transparent: true, opacity: 0.9 });
+        }));
+      bub.userData.off = b * 0.5;
+      sg.add(bub);
+      bubbles.push(bub);
+    }
+    sg.position.y = 0.1;
+    fly.add(sg);
+    var halo = glowSprite(0x3ad17a, 2.4, 0.4);
+    halo.position.y = 0.8;
+    fly.add(halo);
     var tag = makeLabelSprite("小", "#1f9e57", 0.95);
-    tag.position.set(0, ENT_Y + 1.3, 0);
-    grp.add(tag);
+    tag.position.set(0, 1.8, 0);
+    fly.add(tag);
+    grp.add(shadowSprite(1.2, 0.8));
+    grp.add(fly);
     grp.position.set(laneX[lane], 0, spawnZ);
     scene.add(grp);
-    return { type: "shrink", lane: lane, z: spawnZ, x: laneX[lane], mesh: grp, model: sg, hit: false, dead: false, spin: 0 };
+    return { type: "shrink", lane: lane, z: spawnZ, x: laneX[lane], mesh: grp, model: sg, fly: fly, bubbles: bubbles, hit: false, dead: false, spin: 0 };
   }
   // 大摆锤：横摆的重力锤（x 方向摆动，覆盖多车道），缩小可躲
   function makePendulum(lane) {
     var grp = new THREE.Group();
-    var rod = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 3.0, 8),
-      new THREE.MeshLambertMaterial({ color: 0x555a66 }));
-    rod.position.y = ENT_Y + 1.4;
+    // 吊臂 + 顶部横梁（给出「挂在上面」的出处，比光杆一根有信息量）
+    var rod = new THREE.Mesh(geo("pend-rod", function () { return new THREE.CylinderGeometry(0.07, 0.09, 3.2, 8); }),
+      mat("pend-rod", function () { return new THREE.MeshLambertMaterial({ color: 0x555a66 }); }));
+    rod.position.y = ENT_Y + 1.5;
     grp.add(rod);
-    var head = new THREE.Mesh(new THREE.SphereGeometry(0.85, 14, 12),
-      new THREE.MeshLambertMaterial({ color: 0xc0392b }));
-    head.position.y = ENT_Y - 0.2;
+    var beam = new THREE.Mesh(geo("pend-beam", function () { return new THREE.BoxGeometry(3.4, 0.22, 0.22); }),
+      mat("pend-beam", function () { return new THREE.MeshLambertMaterial({ color: 0x3a4152 }); }));
+    beam.position.y = ENT_Y + 3.1;
+    grp.add(beam);
+    // 锤头：低面数球 + flatShading 出砺石棱角，配金属箍（比纯球更「重」）
+    var head = new THREE.Mesh(geo("pend-head", function () { return new THREE.IcosahedronGeometry(0.88, 0); }),
+      mat("pend-head", function () {
+        return new THREE.MeshPhongMaterial({ color: 0xc0392b, shininess: 40, specular: 0x775544, flatShading: true });
+      }));
+    head.position.y = ENT_Y - 0.25;
     grp.add(head);
-    var head2 = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.5, 1.4),
-      new THREE.MeshLambertMaterial({ color: 0x922b21 }));
-    head2.position.y = ENT_Y - 0.2;
-    grp.add(head2);
+    var band = new THREE.Mesh(geo("pend-band", function () { return new THREE.TorusGeometry(0.52, 0.09, 6, 16); }),
+      mat("pend-band", function () { return new THREE.MeshPhongMaterial({ color: 0x77211a, shininess: 70, specular: 0xaa9977 }); }));
+    band.position.y = ENT_Y - 0.25; band.rotation.x = Math.PI / 2;
+    grp.add(band);
+    grp.add(shadowSprite(1.9, 0.85));
     grp.position.set(0, 0, spawnZ);
     scene.add(grp);
     return {
@@ -476,6 +969,13 @@
     player.mesh.rotation.set(0, 0, 0);
     player.mesh.scale.set(1, 1, 1);
     player.mesh.visible = true;
+    playerBlinkT = 2 + Math.random() * 2; // 开场缓一缓再眨眼
+    playerBlinkLeft = 0;
+    if (playerShadow) {
+      playerShadow.position.x = laneX[1];
+      playerShadow.scale.set(2.1, 2.1 * 0.55, 1);
+      playerShadow.visible = true;
+    }
     refreshPlayerVisual();
     gameClock = 0; spawnTimer = 1.1;
     shieldEnd = 0; invincibleEnd = 0; shrinkEnd = 0; slipEnd = 0; warpTimer = 0;
@@ -550,7 +1050,7 @@
         // 通关演出：世界继续向前滑行，金色闪屏淡出，结束切 victory()
         var cSpd = levelSpeed();
         distance += cSpd * dt;
-        if (groundTex) groundTex.offset.y -= cSpd * dt * 0.018;
+        scrollWorld(cSpd * dt);
         var txV = laneX[player.lane];
         player.x += (txV - player.x) * Math.min(1, dt * 14);
         player.mesh.position.x = player.x;
@@ -565,7 +1065,7 @@
       // 死亡演出：世界惯性缓停 + 玩家倒下 + 红屏淡出，结束切 gameOver()
       var dSpd = levelSpeed() * Math.max(0, cinemaTimer) / DEATH_DUR;
       distance += dSpd * dt;
-      if (groundTex) groundTex.offset.y -= dSpd * dt * 0.018;
+      scrollWorld(dSpd * dt);
       var txD = laneX[player.lane];
       player.x += (txD - player.x) * Math.min(1, dt * 14);
       player.mesh.position.x = player.x;
@@ -622,8 +1122,8 @@
     }
     distance += spd * dt;
 
-    // 地面滚动
-    if (groundTex) groundTex.offset.y -= spd * dt * 0.018;
+    // 地面 + 两侧光球滚动（统一入口，演出与主循环共用）
+    scrollWorld(spd * dt);
 
     // 玩家横向平滑移动 + 缩小/光环
     var tx = laneX[player.lane];
@@ -638,6 +1138,30 @@
     player.ring.visible = shield || inv;
     if (shield) { player.ringMat.color.set(0x36c6d3); player.ringMat.opacity = 0.7 + 0.2 * Math.sin(gameClock * 8); }
     else if (inv) { player.ringMat.color.set(0xffd93d); player.ringMat.opacity = 0.7 + 0.2 * Math.sin(gameClock * 10); }
+
+    // 跑动演出：小腿交替摆 + 身体微颠 + 天线尖端呼吸。
+    // 死亡/通关演出在 cinematic 分支里自管（玩家正在倒下，不掺和）。
+    var runF = gameClock * 13;
+    player.feet[0].rotation.x = Math.sin(runF) * 0.55;
+    player.feet[1].rotation.x = -Math.sin(runF) * 0.55;
+    player.body.position.y = Math.abs(Math.sin(runF)) * 0.05;
+    player.tip.scale.setScalar(1 + 0.2 * Math.sin(gameClock * 6));
+    if (playerShadow) {
+      playerShadow.position.x = player.x;
+      playerShadow.scale.set(2.1 * sc, 2.1 * sc * 0.55, 1);
+    }
+    // 眨眼：面牌在「睁眼/闭眼」贴图间切换（贴图级，无额外 draw call）
+    if (playerBlinkLeft > 0) {
+      playerBlinkLeft -= dt;
+      if (playerBlinkLeft <= 0) setPlayerFace(false);
+    } else {
+      playerBlinkT -= dt;
+      if (playerBlinkT <= 0) {
+        setPlayerFace(true);
+        playerBlinkLeft = 0.12;
+        playerBlinkT = 2.4 + Math.random() * 2.4;
+      }
+    }
 
     // 生成：Boss 战只由攻击波驱动，避免与常规波次叠加导致拥挤
     if (bossPhase) {
@@ -666,6 +1190,20 @@
         e.mesh.rotation.z = Math.sin(e.phase) * 0.5;
       }
       e.mesh.position.z = e.z;
+      // 悬浮呼吸 / 引线火花 / 门环差速 / 气泡上升：全部由 e.spin 与 gameClock 推导，
+      // 不引入新随机源（弱机上轨迹可复现，截图与测试才稳）
+      if (e.fly) e.fly.position.y = Math.sin(e.spin * 2.2) * 0.07;
+      if (e.spark) e.spark.scale.setScalar(0.5 + 0.4 * Math.abs(Math.sin(e.spin * 22)));
+      if (e.rings) {
+        for (var ri = 0; ri < e.rings.length; ri++) e.rings[ri].m.rotation.z += dt * e.rings[ri].sp;
+      }
+      if (e.bubbles) {
+        for (var bi = 0; bi < e.bubbles.length; bi++) {
+          var bub = e.bubbles[bi];
+          bub.position.y = 0.45 + ((gameClock * 0.35 + bub.userData.off) % 1) * 0.6;
+          bub.position.x = Math.sin(gameClock * 3 + bub.userData.off * 6) * 0.1;
+        }
+      }
       if (e.model) {
         if (e.type === "portal") e.model.rotation.z += dt * 3;
         else if (e.type === "shrink") e.model.rotation.y += dt * 2;
@@ -886,35 +1424,150 @@
     var grp = new THREE.Group();
     var bodyMat = new THREE.MeshLambertMaterial({ color: cfg.color });
     if (LEVELS[currentLevel].boss === "pendulum") {
-      var core = new THREE.Mesh(new THREE.SphereGeometry(2.0, 18, 16), bodyMat);
+      // 摆锤魔：核心魔球（尖刺 + 犄角 + 怒目）+ 三只轨道摆锤
+      var core = new THREE.Mesh(geo("boss-p-core", function () { return new THREE.SphereGeometry(2.0, 22, 18); }), bodyMat);
       core.position.y = 3.0; grp.add(core);
-      for (var a = 0; a < 3; a++) {
-        var arm = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 5.5, 8),
-          new THREE.MeshLambertMaterial({ color: 0x555a66 }));
-        arm.position.set(Math.cos(a * 2.1) * 2.4, 1.4, Math.sin(a * 2.1) * 2.4);
-        arm.rotation.z = 0.5; grp.add(arm);
-        var ham = new THREE.Mesh(new THREE.SphereGeometry(0.9, 12, 10),
-          new THREE.MeshLambertMaterial({ color: 0xc0392b }));
-        ham.position.set(Math.cos(a * 2.1) * 4.6, 0.2, Math.sin(a * 2.1) * 4.6);
-        grp.add(ham);
+      grp.add(outlineOf(core, 0x3d1420, 1.05));
+      // 球面尖刺：深色小锥绕核心一周，轮廓带刺
+      var spike = new THREE.Mesh(geo("boss-p-spike", function () { return new THREE.ConeGeometry(0.2, 0.75, 7); }),
+        mat("boss-p-spike", function () { return new THREE.MeshLambertMaterial({ color: 0x4a1622 }); }));
+      for (var s = 0; s < 6; s++) {
+        var ang = s * 1.05 + 0.4;
+        var sp2 = new THREE.Mesh(spike.geometry, spike.material);
+        sp2.position.set(Math.cos(ang) * 1.55, 3.0 + 1.45, Math.sin(ang) * 1.0);
+        sp2.rotation.z = -Math.cos(ang) * 0.5;
+        sp2.rotation.x = Math.sin(ang) * 0.5;
+        grp.add(sp2);
       }
+      // 犄角：头顶三根大锥
+      for (var hn = 0; hn < 3; hn++) {
+        var ha = hn * 2.094 + 0.5;
+        var horn = new THREE.Mesh(geo("boss-p-horn", function () { return new THREE.ConeGeometry(0.26, 1.0, 8); }),
+          mat("boss-p-horn", function () { return new THREE.MeshLambertMaterial({ color: 0x6e2233 }); }));
+        horn.position.set(Math.cos(ha) * 0.95, 4.85, Math.sin(ha) * 0.6);
+        horn.rotation.z = -Math.cos(ha) * 0.45;
+        horn.rotation.x = Math.sin(ha) * 0.45;
+        grp.add(horn);
+      }
+      // 怒目：两颗亮黄发光球（animateBoss 里脉冲）——红躯干上红眼会糊，必须高对比
+      var eyes = [];
+      for (var ey = 0; ey < 2; ey++) {
+        var eye = new THREE.Mesh(geo("boss-p-eye", function () { return new THREE.SphereGeometry(0.32, 12, 10); }),
+          mat("boss-p-eye", function () { return new THREE.MeshBasicMaterial({ color: 0xffe066 }); }));
+        eye.position.set(ey === 0 ? -0.75 : 0.75, 3.52, 1.83); // 球心距 2.05 ≈ 半径 2.0，眼球探出一截才看得见
+        grp.add(eye); eyes.push(eye);
+      }
+      grp.userData.eyes = eyes;
+      // 三只轨道摆锤：臂 + 链 + 锤头，绕核心差速公转
+      var arms = [];
+      for (var a = 0; a < 3; a++) {
+        var arm = new THREE.Group();
+        var chain = new THREE.Mesh(geo("boss-p-chain", function () { return new THREE.CylinderGeometry(0.06, 0.06, 3.4, 6); }),
+          mat("boss-p-chain", function () { return new THREE.MeshLambertMaterial({ color: 0x6a7180 }); }));
+        chain.rotation.z = Math.PI / 2; chain.position.x = 2.2;
+        arm.add(chain);
+        var ham = new THREE.Mesh(geo("boss-p-ham", function () { return new THREE.IcosahedronGeometry(0.85, 0); }),
+          mat("boss-p-ham", function () {
+            return new THREE.MeshPhongMaterial({ color: 0xc0392b, shininess: 50, specular: 0x886655, flatShading: true });
+          }));
+        ham.position.x = 4.3;
+        arm.add(ham);
+        var hamBand = new THREE.Mesh(geo("pend-band", function () { return new THREE.TorusGeometry(0.52, 0.09, 6, 16); }),
+          mat("pend-band", function () { return new THREE.MeshPhongMaterial({ color: 0x77211a, shininess: 70, specular: 0xaa9977 }); }));
+        hamBand.position.x = 4.3; hamBand.rotation.y = Math.PI / 2;
+        arm.add(hamBand);
+        arm.position.y = 3.0;
+        arm.rotation.y = a * 2.094;
+        arm.userData.sp = 0.5 + a * 0.14;
+        grp.add(arm);
+        arms.push(arm);
+      }
+      grp.userData.arms = arms;
     } else if (LEVELS[currentLevel].boss === "portal") {
-      var tower = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.8, 4.2, 14), bodyMat);
+      // 传送门法师：符文塔 + 双符环 + 环绕碎片 + 顶端晶石
+      var tower = new THREE.Mesh(geo("boss-m-tower", function () { return new THREE.CylinderGeometry(1.3, 1.8, 4.4, 14); }), bodyMat);
       tower.position.y = 2.4; grp.add(tower);
-      var ring = new THREE.Mesh(new THREE.TorusGeometry(1.7, 0.28, 12, 28),
-        new THREE.MeshBasicMaterial({ color: 0x59e0ff }));
-      ring.position.y = 2.4; ring.rotation.x = Math.PI / 2; grp.add(ring);
+      grp.add(outlineOf(tower, 0x241a4d, 1.04));
+      var ring = new THREE.Mesh(geo("boss-m-ring1", function () { return new THREE.TorusGeometry(1.75, 0.22, 12, 30); }),
+        mat("boss-m-ring1", function () { return new THREE.MeshBasicMaterial({ color: 0x59e0ff }); }));
+      ring.position.y = 2.6; ring.rotation.x = Math.PI / 2; grp.add(ring);
       grp.userData.spinRing = ring;
+      var ring2 = new THREE.Mesh(geo("boss-m-ring2", function () { return new THREE.TorusGeometry(2.05, 0.13, 10, 30); }),
+        mat("boss-m-ring2", function () { return new THREE.MeshBasicMaterial({ color: 0x7a5cff }); }));
+      ring2.position.y = 1.9; ring2.rotation.x = Math.PI / 2 - 0.35; grp.add(ring2);
+      // 塔身正面一颗「法眼」
+      var mEye = new THREE.Mesh(geo("boss-m-eye", function () { return new THREE.SphereGeometry(0.36, 12, 10); }),
+        mat("boss-m-eye", function () { return new THREE.MeshBasicMaterial({ color: 0x9ff2ff }); }));
+      mEye.position.set(0, 2.8, 1.68); // 塔身该高度半径约 1.7，眼睛突出半截
+      grp.add(mEye);
+      grp.userData.eyes = [mEye];
+      // 顶端晶石 + 光晕
+      var crystal = new THREE.Mesh(geo("boss-m-crystal", function () { return new THREE.OctahedronGeometry(0.55, 0); }),
+        mat("boss-m-crystal", function () { return new THREE.MeshBasicMaterial({ color: 0xd6f7ff }); }));
+      crystal.position.y = 5.1;
+      grp.add(crystal);
+      var halo = glowSprite(0x59e0ff, 2.6, 0.55);
+      halo.position.y = 5.1;
+      grp.add(halo);
+      // 环绕碎片：四枚小八面体差速公转（animateBoss 里驱动）
+      var orbit = [];
+      for (var o = 0; o < 4; o++) {
+        var shard = new THREE.Mesh(geo("boss-m-shard", function () { return new THREE.OctahedronGeometry(0.3, 0); }),
+          mat("boss-m-shard", function () {
+            return new THREE.MeshPhongMaterial({ color: 0x8f7bff, shininess: 70, specular: 0xffffff, flatShading: true });
+          }));
+        grp.add(shard);
+        orbit.push({ m: shard, r: 2.7 + (o % 2) * 0.5, y: 2.2 + (o % 3) * 0.9, a: o * 1.57, sp: 0.7 + o * 0.18 });
+      }
+      grp.userData.orbit = orbit;
     } else {
-      var tit = new THREE.Mesh(new THREE.BoxGeometry(3.4, 3.4, 3.4), bodyMat);
-      tit.position.y = 2.4; grp.add(tit);
-      var eye = new THREE.Mesh(new THREE.SphereGeometry(0.5, 12, 10),
-        new THREE.MeshBasicMaterial({ color: 0xfff2a8 }));
-      eye.position.set(0, 3.0, 1.8); grp.add(eye);
+      // 数字泰坦：圆角躯干 + 胸甲铆钉 + 双怒目 + 倒八眉 + 肩甲 + 巨拳
+      var tit = new THREE.Mesh(geo("boss-t-body", function () { return roundedBoxGeo(3.2, 3.4, 2.8, 0.55, 4); }), bodyMat);
+      tit.position.y = 2.3; grp.add(tit);
+      grp.add(outlineOf(tit, 0x5a2410, 1.04));
+      // 胸甲：略大的深色圆角片 + 四颗亮铆钉
+      var armor = new THREE.Mesh(geo("boss-t-armor", function () { return roundedBoxGeo(2.2, 2.4, 0.5, 0.3, 3); }),
+        mat("boss-t-armor", function () { return new THREE.MeshLambertMaterial({ color: 0xd96b28 }); }));
+      armor.position.set(0, 2.5, 1.35);
+      grp.add(armor);
+      var bolts = [[-0.8, 3.3], [0.8, 3.3], [-0.8, 1.7], [0.8, 1.7]];
+      for (var bt = 0; bt < bolts.length; bt++) {
+        var bolt = new THREE.Mesh(geo("boss-t-bolt", function () { return new THREE.SphereGeometry(0.12, 8, 6); }),
+          mat("boss-t-bolt", function () { return new THREE.MeshPhongMaterial({ color: 0xffd9a0, shininess: 90, specular: 0xffffff }); }));
+        bolt.position.set(bolts[bt][0], bolts[bt][1], 1.62);
+        grp.add(bolt);
+      }
+      // 怒目 + 倒八眉
+      var tEyes = [];
+      for (var te = 0; te < 2; te++) {
+        var tEye = new THREE.Mesh(geo("boss-t-eye", function () { return new THREE.SphereGeometry(0.34, 12, 10); }),
+          mat("boss-t-eye", function () { return new THREE.MeshBasicMaterial({ color: 0xfff2a8 }); }));
+        tEye.position.set(te === 0 ? -0.72 : 0.72, 3.1, 1.52);
+        grp.add(tEye); tEyes.push(tEye);
+        var brow = new THREE.Mesh(geo("boss-t-brow", function () { return new THREE.BoxGeometry(0.9, 0.16, 0.3); }),
+          mat("boss-t-brow", function () { return new THREE.MeshLambertMaterial({ color: 0x8a3c12 }); }));
+        brow.position.set(tEye.position.x, 3.55, 1.5);
+        brow.rotation.z = te === 0 ? 0.35 : -0.35; // 倒八眉，越怒
+        grp.add(brow);
+      }
+      grp.userData.eyes = tEyes;
+      // 肩甲 + 巨拳
+      for (var pd = 0; pd < 2; pd++) {
+        var pad = new THREE.Mesh(geo("boss-t-pad", function () { return new THREE.SphereGeometry(0.85, 14, 10); }),
+          mat("boss-t-pad", function () { return new THREE.MeshLambertMaterial({ color: 0xe07a2e }); }));
+        pad.position.set(pd === 0 ? -1.95 : 1.95, 3.5, 0);
+        grp.add(pad);
+        var fist = new THREE.Mesh(geo("boss-t-fist", function () { return new THREE.SphereGeometry(0.62, 12, 10); }),
+          mat("boss-t-fist", function () { return new THREE.MeshLambertMaterial({ color: 0xc85a1e }); }));
+        fist.position.set(pd === 0 ? -2.15 : 2.15, 1.5, 0.35);
+        grp.add(fist);
+      }
     }
-    grp.position.set(0, 0, -30);
+    // 拉近 + 放大：Boss 是关卡高潮，站在 -30 外只有一小团（实测截图确认存在感不足）
+    grp.scale.set(1.6, 1.6, 1.6);
+    grp.position.set(0, 0, -20);
     scene.add(grp);
-    boss = { mesh: grp, baseY: 0, t: 0, key: LEVELS[currentLevel].boss };
+    boss = { mesh: grp, baseY: 0, t: 0, key: LEVELS[currentLevel].boss, baseScale: 1.6 };
   }
   function animateBoss(dt) {
     if (!boss) return;
@@ -922,9 +1575,30 @@
     boss.mesh.position.y = Math.sin(boss.t * 1.5) * 0.4;
     boss.mesh.rotation.y += dt * 0.6;
     if (boss.mesh.userData.spinRing) boss.mesh.userData.spinRing.rotation.z += dt * 2;
+    // 摆锤魔：三只轨道摆锤差速公转
+    if (boss.mesh.userData.arms) {
+      var arms = boss.mesh.userData.arms;
+      for (var i = 0; i < arms.length; i++) arms[i].rotation.y += dt * arms[i].userData.sp;
+    }
+    // 法师：环绕碎片公转 + 上下浮沉
+    if (boss.mesh.userData.orbit) {
+      var orb = boss.mesh.userData.orbit;
+      for (var j = 0; j < orb.length; j++) {
+        var o = orb[j];
+        o.a += dt * o.sp;
+        o.m.position.set(Math.cos(o.a) * o.r, o.y + Math.sin(o.a * 2) * 0.35, Math.sin(o.a) * o.r);
+        o.m.rotation.x += dt * 1.5; o.m.rotation.y += dt * 2;
+      }
+    }
+    // 双目/法眼怒光脉冲（受击时另有整体 scale 脉冲，见 pulseBoss）
+    if (boss.mesh.userData.eyes) {
+      var eyes = boss.mesh.userData.eyes;
+      var pulse = 1 + 0.15 * Math.sin(boss.t * 5);
+      for (var k = 0; k < eyes.length; k++) eyes[k].scale.setScalar(pulse);
+    }
   }
   function pulseBoss() {
-    if (boss) boss.mesh.scale.set(1.12, 1.12, 1.12);
+    if (boss) boss.mesh.scale.setScalar((boss.baseScale || 1) * 1.12);
   }
   function bossDefeated() {
     audio.sfx("levelup");
@@ -976,7 +1650,12 @@
     document.getElementById("scoreText").textContent = score;
     document.getElementById("bestText").textContent = Math.max(best, score);
     if (combo < 2) document.getElementById("comboTag").classList.add("hidden");
-    if (boss) { boss.mesh.scale.x += (1 - boss.mesh.scale.x) * 0.2; boss.mesh.scale.y = boss.mesh.scale.z = boss.mesh.scale.x; }
+    if (boss) {
+      // Boss 受击脉冲衰减回基础缩放（baseScale，见 buildBossMesh）
+      var bs = boss.baseScale || 1;
+      boss.mesh.scale.x += (bs - boss.mesh.scale.x) * 0.2;
+      boss.mesh.scale.y = boss.mesh.scale.z = boss.mesh.scale.x;
+    }
   }
 
   // ---------- 渲染 ----------
@@ -1036,6 +1715,7 @@
     hide("victoryScreen"); hide("levelScreen"); hide("bossBar");
     hide("comboTag");
     if (player) player.mesh.visible = false;
+    if (playerShadow) playerShadow.visible = false;
     document.getElementById("startBest").textContent = best;
     show("startScreen");
     if (window.TVNav && !window.__tvControlsInjected) TVNav.focusFirst();
@@ -1048,6 +1728,7 @@
     hide("gameoverScreen"); hide("victoryScreen"); hide("bossBar");
     hide("comboTag");
     if (player) player.mesh.visible = false;
+    if (playerShadow) playerShadow.visible = false;
     var grid = document.getElementById("levelGrid");
     grid.innerHTML = "";
     for (var i = 0; i < LEVELS.length; i++) {
