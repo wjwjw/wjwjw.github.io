@@ -41,7 +41,10 @@ function makeCtx() {
     createLinearGradient() { return { addColorStop() {} }; },
     createRadialGradient() { return { addColorStop() {} }; },
     strokeText() {},
-    measureText() { return { width: 10 }; }
+    measureText() { return { width: 10 }; },
+    // fx.js v0.2：glow / flash / 环境微粒靠 globalAlpha + lighter 叠加 + drawImage 贴光斑
+    globalAlpha: 1,
+    globalCompositeOperation: 'source-over'
   };
   DRAW_PRIMS.forEach(k => { c[k] = function () {}; });
   return c;

@@ -128,6 +128,7 @@
     viewW = window.innerWidth;
     viewH = window.innerHeight;
     dpr = Math.min(window.devicePixelRatio || 1, 2);
+    fx.setView(viewW, viewH);    // 全屏闪光（受击）要用视口尺寸，缺了这句 fx.flash 静默不生效
 
     canvas.width = Math.max(1, Math.round(viewW * dpr));
     canvas.height = Math.max(1, Math.round(viewH * dpr));
@@ -361,6 +362,10 @@
     lives--;
     audio.sfx('hit');
     flash = 1;
+    // TA：轻量全屏红闪，配下面的震屏一起用 —— 「疼」但不吓人。
+    // 棋盘那层红底由 flash 变量负责（0.32，见 render），这里只补「棋盘之外」的淡红：
+    // alpha 压到 0.10，棋盘区叠加后约 0.39，接近原来单层的观感，不会两处同时拉满。
+    fx.flash('#e5484d', 0.3, { alpha: 0.10 });
     // TA：原来只有一层红闪，孩子常常没察觉「掉了一条命」。补一记震屏 + 撞点星屑，
     // 让「疼」这件事在身体层面先被感觉到，再去读 HUD 上少掉的那颗心。
     if (snake.length) {
@@ -387,6 +392,14 @@
     audio.sfx('eat');
     if (quick) { audio.sfx('fast'); toast('手速真快 +15', 'good'); }
     burst(apple.x, apple.y, '#e5484d', 8);
+    // TA：拾取瞬间的「点亮感」+ 四角星闪光。本地 burst 画的是红色碎屑（尘土感），
+    // fx 这两下补的是「叮」的那一下高光，两者叠在一起才有「吃到了」的清脆感。
+    glowCell(apple.x, apple.y, '#e5484d', 0.55);
+    fx.burst(cellCx(apple.x), cellCy(apple.y), {
+      count: 5, colors: ['#ffffff', '#ffd9d9'], shapes: ['spark4'],
+      speed: [30, 95], size: [layout.tile * 0.16, layout.tile * 0.28],
+      life: [0.26, 0.44], g: 0
+    });
     headPulse = 1;
     ring(apple.x, apple.y, 'rgba(255,150,140,0.92)');
     floatText(apple.x, apple.y, quick ? '+15' : '+10', quick ? '#ffd166' : '#ff9f9f');
@@ -405,6 +418,12 @@
     pendingGrow += 2;
     audio.sfx('star');
     burst(star.x, star.y, '#ffd166', 16);
+    glowCell(star.x, star.y, '#ffd166', 0.75);
+    fx.burst(cellCx(star.x), cellCy(star.y), {
+      count: 7, colors: ['#ffffff', '#ffd166'], shapes: ['spark4'],
+      speed: [40, 120], size: [layout.tile * 0.18, layout.tile * 0.34],
+      life: [0.3, 0.5], g: 0
+    });
     headPulse = 1;
     ring(star.x, star.y, 'rgba(255,209,102,0.95)', true);
     floatText(star.x, star.y, '+50', '#ffd166');
@@ -483,6 +502,15 @@
   function ring(x, y, color, big) {
     rings.push({ x: cellCx(x), y: cellCy(y), color: color, age: 0, life: 0.42, big: !!big });
     if (rings.length > 8) rings.shift();
+  }
+
+  /* TA：柔光脉冲（fx.glow，lighter 叠加的「点亮感」，比 ring 更柔）。
+   * 半径跟着格子走，换分辨率 / 改视口都不会跑偏。 */
+  function glowCell(x, y, color, alpha) {
+    fx.glow(cellCx(x), cellCy(y), {
+      color: color, alpha: alpha,
+      r0: layout.tile * 0.22, r1: layout.tile * 1.15, life: 0.42
+    });
   }
 
   function updateFx(dt) {
@@ -566,19 +594,48 @@
   }
 
   // 蛇身每节在屏幕上的坐标（按 stepAcc/stepMs 做帧间插值，蛇是连续爬而不是一格格跳）
+  // 帧内插值系数：抽出来给 drawSnake 与尾迹发射器共用，两边取到的是同一个位置
+  function snakeT() {
+    var t = stepMs > 0 ? stepAcc / stepMs : 1;
+    if (t > 1) t = 1;
+    if (warped) t = 1;
+    return t;
+  }
+
+  function snakePointAt(i, t) {
+    var cur = snake[i];
+    var p = prev[Math.min(i, prev.length - 1)] || cur;
+    // 穿墙的那一格直接落位，否则插值会让它横穿整个棋盘
+    if (Math.abs(p.x - cur.x) > 1 || Math.abs(p.y - cur.y) > 1) p = cur;
+    return {
+      x: layout.x0 + (p.x + (cur.x - p.x) * t) * layout.tile + layout.tile / 2,
+      y: layout.y0 + (p.y + (cur.y - p.y) * t) * layout.tile + layout.tile / 2
+    };
+  }
+
   function snakePoints(t) {
     var pts = [];
-    for (var i = 0; i < snake.length; i++) {
-      var cur = snake[i];
-      var p = prev[Math.min(i, prev.length - 1)] || cur;
-      // 穿墙的那一格直接落位，否则插值会让它横穿整个棋盘
-      if (Math.abs(p.x - cur.x) > 1 || Math.abs(p.y - cur.y) > 1) p = cur;
-      pts.push({
-        x: layout.x0 + (p.x + (cur.x - p.x) * t) * layout.tile + layout.tile / 2,
-        y: layout.y0 + (p.y + (cur.y - p.y) * t) * layout.tile + layout.tile / 2
-      });
-    }
+    for (var i = 0; i < snake.length; i++) pts.push(snakePointAt(i, t));
     return pts;
+  }
+
+  /* TA：移动尾迹（fx.emit 连续发射器）。
+   * 在蛇尾撒一点极淡的碎屑，让孩子看得出「蛇在爬」——目标是动感，不是糊一片，所以：
+   *   ① rate 只有 14 个/秒，生命 0.18~0.34s，同屏稳态只有 3~4 个；
+   *   ② 尺寸小、颜色自带低透明度，叠在草地上几乎是「一层呼吸」；
+   *   ③ 只在真正在前进时调用（暂停 / 倒计时 / 调试冻结都不调），蛇不动就不该冒烟。 */
+  var TRAIL_COLORS = ['rgba(126,224,184,0.32)', 'rgba(217,255,176,0.24)'];
+  // 参数对象提到模块级：每帧复用同一个，别在循环里造垃圾（§10.3 的 GC 红线）
+  var TRAIL_OPTS = {
+    rate: 14, colors: TRAIL_COLORS, shapes: ['dot'],
+    speed: [4, 16], size: [1.6, 3.2], life: [0.18, 0.34],
+    g: 0, drag: 1.8, shrink: true
+  };
+
+  function emitTrail(dt) {
+    if (!snake.length) return;
+    var p = snakePointAt(snake.length - 1, snakeT());
+    fx.emit(p.x, p.y, dt, TRAIL_OPTS);
   }
 
   /*
@@ -590,9 +647,7 @@
    * 绘制次数约 N+2 次（老设备可控），比之前每节 fill+stroke 的 2N 次还少。
    */
   function drawSnake(now) {
-    var t = stepMs > 0 ? stepAcc / stepMs : 1;
-    if (t > 1) t = 1;
-    if (warped) t = 1;
+    var t = snakeT();
 
     var tile = layout.tile;
     var pts = snakePoints(t);
@@ -1070,6 +1125,7 @@
         guard++;
       }
       if (star && now - star.t0 > STAR_LIFE) star = null;
+      emitTrail(dt);           // 蛇确实在前进 → 尾巴拖一条很淡的尾迹
     }
 
     updateParticles(dt);
@@ -1138,6 +1194,9 @@
       clearFx: function () {
         floats = []; rings = []; particles = [];
         levelFlash = 0; flash = 0; headPulse = 0; invUntil = 0;
+        // 吃食物的 glow / spark4 走的是共享 fx 层（shared/fx.js），不在上面那几个数组里，
+        // 必须一并清掉，否则像素探针会把柔光误读成「蛇头颜色不对」。fx.clear() 不动环境花粉。
+        fx.clear();
       },
       step: step,
       // 包一层：外部调用时补 Date.now()，否则 render(undefined) 会让所有

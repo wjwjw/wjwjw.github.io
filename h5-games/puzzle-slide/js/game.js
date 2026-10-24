@@ -130,9 +130,18 @@
     buildPicture();
     prerenderStatics();
 
-    // 环境微粒：几粒暖光缓慢上漂，让「安静的手工桌」不至于死板
+    // 全屏闪光要用的视口尺寸（缺了这句 flash 会静默不生效，见 STANDARD §10.2）
+    fx.setView(viewW, viewH);
+
+    // 环境微粒：几粒暖光缓慢上漂，让「安静的手工桌」不至于死板。
+    // 用 x0/y0 把它们关进「拼图桌面」那一条带里，别飘到顶部 HUD 和底部提示行上（§10.6）。
+    var mPad = Math.round(L.size * 0.12);
+    var mx = Math.max(0, L.bx - mPad);
+    var my = Math.max(0, L.by - mPad);
     fx.setAmbient({
-      count: 10, w: viewW, h: viewH,
+      count: 10, x0: mx, y0: my,
+      w: Math.min(viewW, L.rx + L.rsize + mPad) - mx,
+      h: L.size + mPad * 2,
       colors: ['#ffd166', '#c792ff'],
       glow: 26, size: [3, 9], speed: [5, 13],
       alpha: [0.04, 0.11], core: 0.5
@@ -338,16 +347,21 @@
       snapIdx = res.to;
       audio.sfx('snap');
 
-      // TA：归位爆点 —— 绿金星粒从块心喷出 + 一圈扩散环。
+      // TA：归位爆点 —— 绿金星粒从块心喷出 + 一圈扩散环 + 一层柔光脉冲。
       // 拼图的正反馈很稀疏（几十步才拼好一块），这一步必须给足「我做到了」的爽感。
       var sp = cellPos(res.to);
       var scx = sp.x + L.tile / 2, scy = sp.y + L.tile / 2;
       fx.burst(scx, scy, {
         count: 12, colors: ['#3ED598', '#FFD166', '#ffffff'],
-        shapes: ['star', 'dot'], speed: [60, 190],
+        shapes: ['star', 'spark4', 'dot'], speed: [60, 190],
         size: [2.5, 6], life: [0.45, 0.85], g: 300
       });
       fx.ring(scx, scy, { color: '#3ED598', r1: L.tile * 0.62, lw: 4 });
+      // 柔光比环更「点亮」而不刺眼，块落位瞬间的一层暖绿余晖
+      fx.glow(scx, scy, {
+        color: '#3ED598', r0: L.tile * 0.22, r1: L.tile * 0.95,
+        life: 0.5, alpha: 0.7
+      });
     }
     updateHud();
   }
@@ -366,6 +380,24 @@
     fx.burst(ex, ey, {
       count: 6, colors: ['#8a93a8', '#6b7490'], shapes: ['dot'],
       speed: [30, 95], size: [2, 4], life: [0.25, 0.45], g: 260
+    });
+  }
+
+  /* 滑动扬尘：方块在格子间移动期间，从块的下沿跟拍撒一点淡尘。
+   * 用 fx.emit 的连续发射器（按 rate×dt 累积、帧率无关），**每帧调一次**；
+   * 动画一结束 anim 归 null，这里自然就不再调用，尘也跟着停。
+   * rate 压得很低（14/s），要的是「推过桌面留下的一层薄灰」，不是沙尘暴。 */
+  function slideDust(dt) {
+    if (!anim) return;
+    var pr = Math.min(1, (Date.now() - anim.start) / ANIM_MS);
+    var e = pr < 0.5 ? 2 * pr * pr : 1 - Math.pow(-2 * pr + 2, 2) / 2;   // easeInOutQuad，与绘制同一条曲线
+    var cx = (anim.fromC + (anim.toC - anim.fromC) * e) * L.tile;
+    var cy = (anim.fromR + (anim.toR - anim.fromR) * e) * L.tile;
+    fx.emit(L.bx + cx + L.tile / 2, L.by + cy + L.tile * 0.84, dt, {
+      rate: 14, angle: -Math.PI / 2, spread: 0.9,
+      speed: [10, 34], size: [1.4, 3.2], life: [0.25, 0.5],
+      colors: ['#8a93a8', '#6b7490', '#c8cfe0'], shapes: ['dot'],
+      g: 24, drag: 2.2
     });
   }
 
@@ -423,6 +455,9 @@
     // 结算文本照旧同步写（测试要读、用户切走也不丢），只把覆盖层推迟到彩纸之后，
     // 否则卡片一盖，彩纸全被 90% 不透明的遮罩吃掉。
     fx.confetti({ count: 80, x0: 0, x1: viewW, w: viewW });
+    // 全屏金光：整张拼好是这一局唯一的大事件，给一下「灯被打亮」的瞬时感。
+    // alpha 压到 0.3 —— 低龄玩家看的是满屏彩纸，闪太狠反而吓人（§10.6）。
+    fx.flash('#ffd166', 0.35, { alpha: 0.3 });
     if (clearTimer) clearTimeout(clearTimer);
     clearTimer = setTimeout(function () {
       clearTimer = null;
@@ -749,6 +784,9 @@
     fx.update(dt);
 
     if (state === STATE.PEEK && now >= peekUntil) endPeek();
+
+    // 滑动扬尘：动画期间每帧调一次（anim 一归 null 就自然停手）
+    if (anim && (state === STATE.PLAY || state === STATE.PEEK)) slideDust(dt);
 
     if (state === STATE.PLAY) {
       timeLeft -= dt;

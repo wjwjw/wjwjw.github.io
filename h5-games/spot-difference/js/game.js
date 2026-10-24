@@ -82,6 +82,9 @@
     canvas.style.width = viewW + 'px';
     canvas.style.height = viewH + 'px';
 
+    // TA：告诉特效层视口尺寸 —— fx.flash 靠它铺满全屏（缺了这句 flash 静默不生效）。
+    fx.setView(viewW, viewH);
+
     var topPad = Math.min(126, Math.max(84, viewH * 0.17));   // 给 HUD 留位
     var bottomPad = Math.max(12, viewH * 0.03);
     var sidePad = Math.max(12, viewW * 0.018);
@@ -433,13 +436,21 @@
     var popOpts = {
       count: combo > 1 ? 16 : 11,
       colors: ['#6ef0b8', '#ffd166', '#ffffff'],
-      shapes: ['star', 'dot'],
+      shapes: ['star', 'spark4', 'dot'],       // spark4 = 拾取瞬间的「叮」一下
       speed: [70, 210], size: [2.5, 6], life: [0.5, 0.9], g: 280
     };
     fx.burst(lx, ly, popOpts);
     fx.burst(rx, ry, popOpts);
     fx.ring(lx, ly, { color: '#6ef0b8', r1: layout.w * 0.14, lw: 4 });
     fx.ring(rx, ry, { color: '#6ef0b8', r1: layout.w * 0.14, lw: 4 });
+    // TA：环之外再给一团柔光脉冲（lighter 叠加的「点亮感」，比环更柔）。
+    // 左右两幅必须同时点亮（STANDARD §10.6）—— 只放一边会让画面明显「歪」。
+    var glowOpts = {
+      color: '#6ef0b8', r0: layout.w * 0.03, r1: layout.w * 0.17,
+      life: 0.55, alpha: 0.8
+    };
+    fx.glow(lx, ly, glowOpts);
+    fx.glow(rx, ry, glowOpts);
     fx.float(lx, ly - layout.h * 0.08, '+' + gain,
              { color: '#ffd166', size: Math.max(18, layout.h * 0.10) });
 
@@ -454,6 +465,8 @@
       audio.sfx('levelclear');
       // TA：绿色光晕之外再撒一轮彩纸 —— 找不同是「盯到眼酸」的玩法，收尾该热闹一点
       fx.confetti({ count: 70, x0: 0, x1: viewW, w: viewW });
+      // TA：再来一记暖金全屏闪光收尾（需 resize 里的 fx.setView，否则静默不生效）
+      fx.flash('#ffd166', 0.35, { alpha: 0.32 });
       clearTimer = setTimeout(function () { clearTimer = null; levelClear(); }, CLEAR_DELAY);
     }
   }

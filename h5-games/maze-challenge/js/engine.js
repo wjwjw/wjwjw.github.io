@@ -25,6 +25,11 @@
   // [PLACEHOLDER] 0.5s 为提案值，未经儿童实测，可按手感微调。
   var MOVE_COOLDOWN = 0.5;
 
+  // 通关庆祝时长（秒）：终点金光 + 星粒 + 全场彩纸演完才收手。
+  // 结算文本由 main.js 在 onWin 里**同步**写好，只把覆盖层显示推迟到这里之后
+  // （STANDARD §10.6）。main.js 的结算卡延迟取 Game.CELEBRATE，两处不会漂移。
+  var CELEBRATE = 1.15;
+
   var CHARACTERS = [
     { id: "dino", name: "小恐龙", color: "#6bcb77" },
     { id: "cat", name: "小猫", color: "#ffd93d" },
@@ -65,6 +70,10 @@
     this.state = "idle";
     this._raf = null;
     this.moveLock = 0; // 移动冷却剩余时间（秒）
+    // TA 特效层（../shared/fx.js）：事件粒子 / 环境花粉 / 通关彩纸
+    this.fx = FX.create();
+    this.slideDust = 0;   // 滑行扬尘剩余时长（香蕉/弹簧推力滑动时 >0）
+    this.celebrateT = 0;  // 通关庆祝剩余时长（>0 时循环继续跑，把彩纸演完）
   }
 
   Game.prototype.load = function (levelIndex, character) {
@@ -87,7 +96,9 @@
     this.freezeTimer = 0; this.burnImmune = 0; this.hitInvuln = 0;
     this.redFlash = 0; this.hurtFlash = 0; this.shakeT = 0; this.springAnim = 0;
     this.moveLock = 0;
+    this.slideDust = 0; this.celebrateT = 0;
     this.time = 0; // 全局动画时钟（地形/怪兽/角色常驻动效）
+    if (this.fx) this.fx.clear();
     // 怪兽
     this.monsters = (lv.monsters || []).map(function (m) {
       var path = m.path.map(function (p) { return [p[0], p[1]]; });
@@ -116,13 +127,28 @@
     this.canvas.style.height = this.rows * tile + "px";
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     this.ctx.imageSmoothingEnabled = false;
+    // TA：环境花粉关进整块棋盘（草地氛围），resize 重建（运动元素重建不「跳」）
+    if (this.fx) {
+      var bw = this.cols * this.TILE, bh = this.rows * this.TILE;
+      this.fx.setView(bw, bh);
+      this.fx.setAmbient({
+        count: 10, w: bw, h: bh,
+        colors: ["#fffbe6", "#e8ffd8"], glow: 18,
+        size: [2, 5], speed: [4, 9], alpha: [0.05, 0.13], core: 0.5
+      });
+    }
   };
 
   Game.prototype.start = function () {
+    if (this._raf) cancelAnimationFrame(this._raf);   // 通关庆祝循环可能还在跑，重开局前先掐掉
+    this._raf = null;
     this.state = "playing"; this.last = performance.now(); this.loop();
   };
   Game.prototype.pause = function () {
-    if (this.state === "playing") this.state = "paused";
+    // 只有真正在跑才响应暂停：通关庆祝（"win"）期间不暂停，
+    // 否则会停在 win 态、resume() 又要求 paused，结算卡就永远弹不出来。
+    if (this.state !== "playing") return;
+    this.state = "paused";
     if (this._raf) cancelAnimationFrame(this._raf);
   };
   Game.prototype.resume = function () {
@@ -134,7 +160,8 @@
   };
 
   Game.prototype.loop = function () {
-    if (this.state !== "playing") return;
+    // "win" 态继续跑：通关庆祝（彩纸/金光）还要演 1 秒多，之后才弹结算卡
+    if (this.state !== "playing" && this.state !== "win") return;
     var now = performance.now();
     var dt = Math.min(0.05, (now - this.last) / 1000);
     this.last = now;
@@ -175,6 +202,18 @@
       this.grid[this.py][this.px] = ".";
       this.audio.sfx("heart");
       if (this.cb.onHearts) this.cb.onHearts(this.hearts);
+      // TA：捡到爱心 —— 粉色心形喷发 + 扩散环 + 柔光，先「亮一下」再看到血量 +1
+      if (this.fx) {
+        var hx = this.px * this.TILE + this.TILE / 2, hy = this.py * this.TILE + this.TILE / 2;
+        this.fx.burst(hx, hy, {
+          count: 14, colors: ["#ff4d6d", "#ff8fa3", "#ffffff"],
+          shapes: ["heart", "spark4", "dot"],
+          speed: [50, 170], size: [2.5, 6], life: [0.45, 0.85], g: 240
+        });
+        this.fx.ring(hx, hy, { color: "#ff8fa3", r0: this.TILE * 0.2, r1: this.TILE * 0.9, life: 0.5, lw: 3 });
+        // glow 是 lighter 叠加，直接罩在浅色角色上会把它洗白：alpha 收 0.5、半径不出格
+        this.fx.glow(hx, hy, { color: "#ff8fa3", r0: this.TILE * 0.3, r1: this.TILE * 0.95, life: 0.55, alpha: 0.5 });
+      }
     }
     this.checkHazard();
     this.checkMonster();
@@ -183,7 +222,10 @@
     this.animDur = Math.max(0.12, dist * 0.12);
     this.animT = 0;
     this.moveLock = MOVE_COOLDOWN; // 启动移动冷却：0.5s 内不可再移动
-    if (dist > 0) this.shakeT = Math.max(this.shakeT, 0.22);
+    if (dist > 0) {
+      this.shakeT = Math.max(this.shakeT, 0.22);
+      this.slideDust = this.animDur + 0.1;   // 滑行期间脚下持续扬尘（update 里跟拍）
+    }
     // 到达终点不在此立即通关：交给 update() 在滑入动画(animT→1)播完后判定，
     // 确保角色完全滑入并停在终点格后才弹出通关，避免"角色尚未进入就秒通关"。
     if (this.hearts <= 0) { this.lose(); return; }
@@ -205,6 +247,15 @@
       } else if (c === "P") {
         this.springAnim = 0.42;
         this.audio.sfx("spring");
+        // TA：弹簧弹出 —— 向上喷的蓝色菱形碎屑，配合 boing 压扁回弹
+        if (this.fx) {
+          this.fx.burst(this.px * this.TILE + this.TILE / 2, this.py * this.TILE + this.TILE * 0.6, {
+            count: 10, colors: ["#5a8dee", "#7fb8ff", "#ffffff"],
+            shapes: ["diamond", "dot"],
+            speed: [40, 140], size: [2, 4.5], life: [0.3, 0.6], g: 300,
+            angle: -Math.PI / 2, spread: 1.2
+          });
+        }
         var b = OPP[dir];
         var d2 = DIRS[b];
         var steps = 0;
@@ -228,6 +279,14 @@
     if (this.cb.onHearts) this.cb.onHearts(this.hearts);
     this.hurtFlash = 0.45; // 角色变红
     this.shakeT = 0.32;    // 角色震动
+    // TA：受击粒子 —— 少量红色碎屑向上迸（§10.6：有代价感但不吓人，不叠红闪）
+    if (this.fx) {
+      this.fx.burst(this.px * this.TILE + this.TILE / 2, this.py * this.TILE + this.TILE / 2, {
+        count: 8, colors: ["#e5484d", "#ff9f9f"],
+        shapes: ["dot", "spark"],
+        speed: [40, 150], size: [2, 4.5], life: [0.3, 0.55], g: 320
+      });
+    }
     if (src === "spike") this.audio.sfx("spike");
     else if (src === "monster") this.audio.sfx("monster");
     this.hitInvuln = 0.6;
@@ -297,6 +356,26 @@
     if (this.moveLock > 0) this.moveLock = Math.max(0, this.moveLock - dt);
     if (this.animT < 1) this.animT = Math.min(1, this.animT + dt / this.animDur);
     for (var i = 0; i < this.monsters.length; i++) this.updateMonster(this.monsters[i], dt);
+    if (this.fx) this.fx.update(dt);
+    // 滑行扬尘：香蕉/弹簧推力滑动期间，脚下持续冒尘（沿插值位置跟拍）
+    if (this.slideDust > 0 && this.fx) {
+      this.slideDust -= dt;
+      var T = this.TILE;
+      var dx = this.fromX + (this.px - this.fromX) * this.animT;
+      var dy = this.fromY + (this.py - this.fromY) * this.animT;
+      this.fx.emit(dx * T + T / 2, dy * T + T * 0.72, dt, {
+        rate: 46, angle: -Math.PI / 2, spread: 0.7,
+        speed: [16, 60], size: [1.6, 4], life: [0.28, 0.55],
+        colors: ["#e6d9a8", "#cdeeb0", "#ffffff"], shapes: ["dot"], g: 40, drag: 2.0
+      });
+    }
+    // 通关庆祝：怪兽继续巡游、彩纸继续落。倒计时走完把 state 收成 "won"，
+    // loop 守卫下一帧自然停手（onWin 已在 win() 里同步回调过了）。
+    if (this.state === "win") {
+      this.celebrateT -= dt;
+      if (this.celebrateT <= 0) this.state = "won";
+      return;                      // 庆祝期间不再判定碰撞/通关
+    }
     this.checkMonster();
     // 角色已完全滑入终点格(animT≥1)才判定通关：
     // 等滑入动画播放完毕、角色确实停在终点，再显示通关画面。
@@ -307,9 +386,25 @@
 
   Game.prototype.win = function () {
     this.state = "win";
-    if (this._raf) cancelAnimationFrame(this._raf);
     this.audio.sfx("win");
     var stars = this.hearts >= 5 ? 3 : this.hearts >= 3 ? 2 : 1;
+    // TA：通关庆祝 —— 终点金光 + 星粒爆发 + 全场彩纸（STANDARD §10.6）。
+    // 引擎停在 "win" 态继续跑循环，把彩纸/金光演完（celebrateT 归零后自行收手）。
+    var T = this.TILE;
+    var ex = this.px * T + T / 2, ey = this.py * T + T / 2;
+    if (this.fx) {
+      this.fx.burst(ex, ey - T * 0.2, {
+        count: 26, colors: ["#ffd166", "#fff3b0", "#ff8fa3", "#7ee0b8"],
+        shapes: ["star", "diamond", "spark4", "dot"],
+        speed: [80, 240], size: [3, 7], life: [0.6, 1.2], g: 260
+      });
+      this.fx.glow(ex, ey, { color: "#ffd166", r0: T * 0.5, r1: T * 1.8, life: 0.9, alpha: 0.9 });
+      this.fx.confetti({ count: 60, x0: 0, x1: this.cols * T, w: this.cols * T });
+      this.celebrateT = CELEBRATE;
+    } else {
+      this.celebrateT = 0;   // 无特效层（如无头测试）→ 不必拖时间
+    }
+    // 同步回调：结算文本 / 进度落盘立刻发生，只有覆盖层的显示由 main.js 延后
     if (this.cb.onWin) this.cb.onWin(stars);
   };
   Game.prototype.lose = function () {
@@ -332,8 +427,12 @@
     for (var y = 0; y < this.rows; y++)
       for (var x = 0; x < this.cols; x++)
         this.drawTile(ctx, x, y, this.grid[y][x], T);
+    // TA：环境花粉飘在草地上、角色之下（fx.drawBack）
+    if (this.fx) this.fx.drawBack(ctx);
     for (var i = 0; i < this.monsters.length; i++) this.drawMonster(ctx, this.monsters[i], T);
     this.drawPlayer(ctx, T);
+    // TA：事件粒子 / 通关彩纸在最上层（fx.drawFront）
+    if (this.fx) this.fx.drawFront(ctx);
     ctx.restore();
     // 状态染色（不受震动影响，铺满全屏）
     if (this.burnImmune > 0) { ctx.fillStyle = "rgba(255,60,40,0.18)"; ctx.fillRect(0, 0, this.cols * T, this.rows * T); }
@@ -788,6 +887,7 @@
     ctx.closePath();
   };
 
+  Game.CELEBRATE = CELEBRATE;   // 秒。暴露给 main.js：结算卡延迟 = 庆祝时长，单一来源
   global.Game = Game;
   global.CHARACTERS = CHARACTERS;
 })(window);

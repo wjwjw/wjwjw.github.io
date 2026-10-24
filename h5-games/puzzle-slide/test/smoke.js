@@ -38,6 +38,9 @@ function makeCtx() {
     clearRect() {},
     beginPath() {}, closePath() {}, moveTo() {}, lineTo() {},
     setLineDash() {},
+    // fx.js v0.2 的 glow / flash / emit 会读改这两个属性、并用 drawImage 贴光斑（§10.5）
+    globalAlpha: 1,
+    globalCompositeOperation: 'source-over',
     createLinearGradient() { return { addColorStop() {} }; },
     createRadialGradient() { return { addColorStop() {} }; },
     strokeText() {},

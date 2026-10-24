@@ -47,7 +47,7 @@ const bannedSyntax = [
   [/\bfor\s*\(\s*(?:let|const|var)\s+\w+\s+of\b/, 'for...of 循环'],
   [/\bfor\s*\(\s*(?:let|const|var)\s*\[/, 'for...of 解构'],
 ];
-['js/levels.js', 'js/audio.js', 'js/engine.js', 'js/main.js'].forEach(rel => {
+['js/levels.js', 'js/audio.js', 'js/engine.js', 'js/main.js', '../shared/fx.js'].forEach(rel => {
   const s = read(rel);
   bannedSyntax.forEach(([re, name]) => ok(!re.test(s), rel + ' 不应使用 ' + name));
 });
@@ -90,6 +90,8 @@ ok(!/type\s*=\s*["']module["']/.test(html), 'index.html 不应使用 ES module')
 ok(!/<script[^>]*\bimport\b/.test(html), 'index.html 不应在 script 里用 import');
 // 彩色 emoji 在电视上会渲染成 □；文字符号（★☆♪✦✕）与 inline SVG 是允许的
 ok(!/[\u{1F300}-\u{1FAFF}\u{1F000}-\u{1F2FF}]/u.test(html), 'index.html 不应含彩色 emoji');
+// 特效公共层必须在 engine.js 之前加载（engine 构造 Game 时就用到 FX）
+ok(/<script src="\.\.\/shared\/fx\.js"><\/script>/.test(html), 'index.html 应引入 ../shared/fx.js');
 
 // ============================================================
 section('5) 关卡数据');

@@ -142,6 +142,8 @@
 
     computeLayout();
     prerenderStatics();
+    // v0.2：全屏闪光（连对 3 的高光）要靠视口尺寸算填充范围，缺这句 flash 会静默不生效
+    fx.setView(viewW, viewH);
 
     // 环境微粒：几粒极淡的暖光缓慢上漂，衬托「教室夜晚」的安静氛围
     fx.setAmbient({
@@ -249,6 +251,8 @@
   }
 
   var toastTimer = null;
+  // 过关结算卡的延迟弹出计时器（庆祝彩纸先演 1.15s）；退出/重开时要取消，防「迟到弹卡」
+  var clearTimer = null;
   function toast(msg, kind) {
     el.toast.textContent = msg;
     el.toast.className = kind || '';
@@ -284,6 +288,7 @@
     timeLeft = timeTotal;
     lastTickSec = -1;
     fx.clear();
+    if (clearTimer) { clearTimeout(clearTimer); clearTimer = null; }   // 防上一关的结算卡迟到弹出
 
     state = STATE.ASK;
     hideScreens();
@@ -339,15 +344,25 @@
       fx.burst(ocx, ocy, {
         count: combo > 2 ? 26 : 16,
         colors: ['#3ED598', '#ffd166', '#7fb8ff', '#ffffff'],
-        shapes: ['star', 'rect', 'dot'],
+        shapes: ['star', 'spark4', 'rect', 'dot'],
         speed: [90, 260], size: [3, 7], life: [0.55, 1.0], g: 300
       });
       fx.ring(ocx, ocy, { color: '#3ED598', r1: layout.ow * 0.5, lw: 4 });
+      // v0.2 柔光脉冲：判定瞬间先「亮一下」，孩子随后才去读 toast 文字。
+      // 半径取题目面板的一半，好让光晕漫出白色选项卡、落到深色背景上；
+      // 光斑是 lighter 叠加，压在白卡上只会更白，看不出颜色。
+      fx.glow(ocx, ocy, { r0: 8, r1: layout.pw * 0.5, life: 0.5, color: '#3ED598' });
     } else {
       fx.shake(Math.min(9, 5 + layout.ow * 0.02), 0.3);
       fx.burst(ocx, ocy, {
         count: 8, colors: ['#E5484D'],
         shapes: ['dot'], speed: [50, 150], size: [2.5, 5], life: [0.35, 0.6], g: 420
+      });
+      // 答错保持「有代价感但不吓人」：只再补一撮很小的暗红菱形碎屑，
+      // 不加全屏红闪、也不加大抖动幅度。
+      fx.burst(ocx, ocy, {
+        count: 6, colors: ['#8E2433'],
+        shapes: ['diamond'], speed: [40, 120], size: [2, 3.5], life: [0.3, 0.55], g: 430
       });
     }
 
@@ -357,6 +372,9 @@
       score += 100 + (combo - 1) * 20;
       timeLeft = Math.min(timeTotal, timeLeft + 1);
       audio.sfx('right');
+      // v0.2 全屏闪光：连对 3 是个值得「哇一下」的节点，极淡的一下就够（alpha 0.16），
+      // 不盖过判定文字，老设备上也不会糊。
+      if (combo === 3) fx.flash('#ffffff', 0.18, { alpha: 0.16 });
       toast('答对啦！ +' + (100 + (combo - 1) * 20) + (combo > 1 ? '   连击 x' + combo : ''), 'good');
     } else {
       combo = 0;
@@ -394,8 +412,16 @@
 
     updateHud();
     hide('hud');
-    show('clearScreen');
-    focusFirst('clearScreen');
+
+    // TA：过关庆祝 —— 先彩纸 + 金光，结算卡晚 1.15s 再弹
+    // （§10.6：结算文本同步写，只推迟覆盖层显示；startLevel/gotoStart 里 clearTimeout 防迟到弹卡）
+    fx.confetti({ count: 70, x0: 0, x1: viewW, w: viewW });
+    fx.glow(viewW / 2, viewH * 0.32, { color: '#ffd166', r0: 30, r1: 180, life: 0.9, alpha: 0.9 });
+    if (clearTimer) clearTimeout(clearTimer);
+    clearTimer = setTimeout(function () {
+      clearTimer = null;
+      if (state === STATE.CLEAR) { show('clearScreen'); focusFirst('clearScreen'); }
+    }, 1150);
   }
 
   function gameOver() {
@@ -422,6 +448,7 @@
     question = null;
     chosen = -1;
     fx.clear();
+    if (clearTimer) { clearTimeout(clearTimer); clearTimer = null; }
     el.startBest.textContent = best;
     show('startScreen');
     focusFirst('startScreen');

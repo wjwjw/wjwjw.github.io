@@ -4,7 +4,16 @@ global.performance = { now: () => Date.now() };
 global.requestAnimationFrame = () => 0;
 global.cancelAnimationFrame = () => {};
 
+// fx.js 预渲染光斑/暗角要 document.createElement('canvas')，给个最小桩
+global.document = {
+  createElement: () => ({
+    width: 0, height: 0,
+    getContext: () => ({ createRadialGradient: () => ({ addColorStop: () => {} }), fillRect: () => {} }),
+  }),
+};
+
 global.LEVELS = require("./js/levels.js");
+require("../shared/fx.js");
 require("./js/audio.js");
 require("./js/engine.js");
 
@@ -16,8 +25,10 @@ function makeCtx() {
     ellipse: noop, arcTo: noop, fillText: noop, setTransform: noop, save: noop,
     restore: noop, translate: noop, scale: noop, rotate: noop, quadraticCurveTo: noop,
     stroke: noop, clip: noop, rect: noop,
-    clip: noop, rect: noop,
+    // fx.js 专用：光斑/粒子绘制（drawImage）、飘字描边（strokeText）
+    drawImage: noop, strokeText: noop,
     fillStyle: "", strokeStyle: "", font: "", textAlign: "", textBaseline: "", imageSmoothingEnabled: false,
+    globalAlpha: 1, globalCompositeOperation: "source-over", lineCap: "", lineJoin: "",
   };
 }
 const canvas = { width: 0, height: 0, style: {}, getContext: () => makeCtx(), addEventListener: () => {} };
@@ -32,7 +43,7 @@ function newGame(idx) {
 }
 
 let pass = 0, fail = 0;
-function check(name, cond) { console.log((cond ? "OK  " : "FAIL ") + name); cond ? pass++ : fail++; }
+function check(name, cond, err) { console.log((cond ? "OK  " : "FAIL ") + name + (cond || !err ? "" : "  ← " + err)); cond ? pass++ : fail++; }
 
 // 模拟真实输入节奏：每次按键前推进 0.5s（移动冷却时长），避免连按被冷却拦截
 const STEP = 0.5;
@@ -114,7 +125,8 @@ function safePath(grid, s, goal) {
   check("L1 求得安全路径", !!path);
   for (let i=1;i<path.length;i++){ const [px,py]=path[i], [qx,qy]=path[i-1];
     const d = px>qx?'right':px<qx?'left':py>qy?'down':'up'; g.update(STEP); g.attemptMove(d); }
-  check("L1 到达终点并通关", g.state === "win" && g.px === 7 && g.py === 7);
+  g.update(STEP);   // 滑入动画播完(animT→1)才判定通关
+  check("L1 到达终点并通关", g.state === "win" && g.px === 7 && g.py === 1);
   check("L1 满血通关(5心)", g.hearts === 5);
 }
 
@@ -126,11 +138,33 @@ function safePath(grid, s, goal) {
   check("撞墙不扣血", g.hearts === h0 && g.px === 1 && g.py === 1);
 }
 
-// ---- L11 香蕉桥（必用关）引擎内可通关 ----
+// ---- 香蕉桥：连续香蕉把角色一路送过缺口，滑入终点后通关 ----
+// （原来这里跑的是「L11 香蕉桥」的固定按键序列，但关卡改版重排后 LEVELS[10]
+//   已变成「冰火两重天」，序列不再成立。改成自建机关关，不随关卡表漂移。）
 {
-  const g = newGame(10);
-  for (const d of ["down","down","down","right","down","down","down","down","down"]) { g.update(STEP); g.attemptMove(d); }
-  check("L11 香蕉桥可通关(引擎内)", g.state === "win");
+  const idx = addCustom(["#######", "#@BBBE#", "#######"]);
+  const g = newGame(idx);
+  g.attemptMove("right"); // 踩 B 连锁滑到 (5,1)=E
+  g.update(STEP);         // 滑入动画播完 → 判定通关
+  check("香蕉桥：连蕉滑到终点并通关(引擎内)", g.state === "win" && g.px === 5 && g.py === 1);
+}
+
+// ---- 通关庆祝（STANDARD §10.6）：onWin 同步回调；庆祝期间不能被暂停卡死 ----
+{
+  const idx = addCustom(["#######", "#@BBBE#", "#######"]);
+  const g = newGame(idx);
+  let won = 0;
+  g.cb.onWin = () => { won++; };
+  g.attemptMove("right");
+  g.update(STEP);   // 判定通关的那一帧
+  check("通关庆祝：onWin 同步回调(结算文本/进度立刻落盘)", won === 1 && g.state === "win");
+  const t0 = g.celebrateT;
+  check("通关庆祝：庆祝窗口 >0（彩纸还要演一会儿）", t0 > 0);
+  g.pause();
+  check("通关庆祝：庆祝期间暂停被忽略(不会卡在 win 态)", g.state === "win" && g.celebrateT === t0);
+  g.update(t0 + 0.1);
+  check("通关庆祝：倒计时走完自动收手(state=won)", g.state === "won");
+  check("通关庆祝：onWin 全程只回调一次", won === 1);
 }
 
 // ---- L10 香蕉弹簧迷宫：可移动不崩 ----
@@ -153,7 +187,7 @@ for (const idx of [5, 14, 19]) {
 
 // ---- 火墙邻接扣血 + 冰墙冻结 ----
 {
-  const g = newGame(12); // L13 冰火两重天（含 F/I）
+  const g = newGame(10); // L11 冰火两重天（同时含 F 与 I；原来写的 12 已是「怪兽方阵」）
   g.burnImmune = 0; g.hearts = 5;
   let fx=-1,fy=-1;
   for (let y=0;y<g.rows;y++) for (let x=0;x<g.cols;x++) if (g.grid[y][x]==='F'){fx=x;fy=y;}

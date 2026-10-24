@@ -29,6 +29,9 @@ const DRAW_PRIMS = ['arc', 'ellipse', 'fillRect', 'strokeRect', 'clearRect', 'fi
 
 function makeCtx() {
   const c = {
+    // fx.js 的 glow（lighter 叠加）/ 环境微粒 / 彩纸都会读写这两个属性，缺了会 ReferenceError（§10.5）
+    globalAlpha: 1,
+    globalCompositeOperation: 'source-over',
     save() {}, restore() {}, translate() {}, scale() {}, rotate() {}, setTransform() {},
     beginPath() {}, closePath() {}, moveTo() {}, lineTo() {}, setLineDash() {},
     createLinearGradient() { return { addColorStop() {} }; },

@@ -11,6 +11,8 @@
 <div id="app">
   <div id="stage">
     <canvas id="game"></canvas>
+    <!-- TA 屏幕空间特效层：叠在 WebGL 之上、HUD 之下，fx.js 的粒子/彩纸画这里 -->
+    <canvas id="fx2d"></canvas>
 
     <!-- 游戏内 HUD（DOM 覆盖层，每帧由 game.js 更新） -->
     <div id="hud" class="hidden">
@@ -117,6 +119,7 @@
 <!-- 经典脚本（兼容 Android 6 WebView，不用 ES module） -->
 <script src="../assets/vendor/three.min.js"></script>
 <script src="../shared/input.js"></script>
+<script src="../shared/fx.js"></script>
     <!-- TV 启动器兜底：MainActivity.onKeyDown 会 evaluateJavascript("TVLauncher.handleBack()")
          把遥控 BACK 键转发到 TVInput 的 back 事件（走 game.js 的 onBack 状态机）。
          number-runner 没有 TVLauncher 全局对象，必须补这个兜底，否则 BACK 永远到不了 JS。 -->

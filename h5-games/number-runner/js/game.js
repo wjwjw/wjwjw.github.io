@@ -20,6 +20,14 @@
   var canvas = document.getElementById("game");
   var audio = new AudioManager();
 
+  // ---------- TA 屏幕空间特效层（../shared/fx.js + 2D 覆盖画布） ----------
+  // fx.js 是 Canvas 2D 库，画不进 WebGL 场景；用一块叠在渲染画布之上的 2D 画布
+  // 做屏幕空间特效：3D 世界坐标先经 project() 投到屏幕像素，再喷粒子/飘字/彩纸。
+  var fx = (window.FX ? FX.create() : null);
+  var fxCanvas = document.getElementById("fx2d");
+  var fx2 = fxCanvas ? fxCanvas.getContext("2d") : null;
+  var _v3 = null;   // 复用的投影向量，避免每帧新建（GC 压力）
+
   // ---------- WebGL / three.js 初始化 ----------
   var renderer, scene, camera, threeOK = false;
   var groundTex = null;
@@ -105,12 +113,31 @@
 
   // ---------- 画布自适应 ----------
   var W = 0, H = 0;
+  var dpr = 1;   // fx2d 背景存储放大倍数：与 renderer.setPixelRatio 同一策略，上限 2
   function resize() {
     var maxW = Math.min(window.innerWidth, 1280);
     var maxH = window.innerHeight;
     W = maxW; H = maxH;
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
     canvas.style.width = W + "px";
     canvas.style.height = H + "px";
+    if (fxCanvas) {
+      // 背景存储按 dpr 放大（高分屏上粒子才不会比 WebGL 画面糊），
+      // CSS 宽高必须钉回 W×H，覆盖层才和 #game 重叠对齐；每帧绘制前 setTransform(dpr,...)。
+      fxCanvas.width = Math.round(W * dpr);
+      fxCanvas.height = Math.round(H * dpr);
+      fxCanvas.style.width = W + "px";
+      fxCanvas.style.height = H + "px";
+    }
+    if (fx) {
+      fx.setView(W, H);
+      // 环境浮尘：极淡的冷色微粒在镜头前漂浮，给深色跑道加「空气感」
+      fx.setAmbient({
+        count: 14, w: W, h: H,
+        colors: ["#7fb8ff", "#ffffff"], glow: 22,
+        size: [2, 6], speed: [4, 10], alpha: [0.04, 0.12], core: 0.5
+      });
+    }
     if (threeOK) {
       renderer.setSize(W, H, false);
       camera.aspect = W / H;
@@ -118,6 +145,15 @@
     }
   }
   window.addEventListener("resize", resize);
+
+  // 3D 世界坐标 → 屏幕像素坐标（fx2d 覆盖层用）。目标在镜头之后（v.z > 1）返回 null。
+  function project(x, y, z) {
+    if (!threeOK || !fx2) return null;
+    if (!_v3) _v3 = new THREE.Vector3();
+    _v3.set(x, y, z).project(camera);
+    if (_v3.z > 1) return null;
+    return { x: (_v3.x + 1) / 2 * W, y: (1 - _v3.y) / 2 * H };
+  }
 
   // 传送动画用的全屏彩色闪光层（动态创建，避免改 HTML）
   function ensureWarpOverlay() {
@@ -566,6 +602,13 @@
         if (warpTimer < 0.25) bEl.classList.add("warn"); else bEl.classList.remove("warn");
       }
       boostActive = true;
+      // TA：加速速度线 —— 屏幕上方随机拉出的向下短光痕，强化「世界在飞掠」
+      if (fx) fx.emit(W * 0.5, H * 0.18, dt, {
+        rate: 70, angle: Math.PI / 2, spread: 0.35,
+        speed: [520, 900], size: [2, 4], life: [0.22, 0.4],
+        colors: ["#7fe9ff", "#ffffff", "#9f7fff"], shapes: ["spark"],
+        g: 0, drag: 0.5, shrink: false, jitter: [W * 0.5, H * 0.16]
+      });
     } else {
       if (camera.fov !== 60) { camera.fov = 60; camera.updateProjectionMatrix(); }
       if (warpOverlay && warpOverlay.style.opacity !== "0") warpOverlay.style.opacity = "0";
@@ -666,9 +709,23 @@
     updateHUD();
   }
 
+  // 实体身上一点的屏幕坐标（数字块/炸弹中心略偏上）
+  function entPos(e) { return project(e.x, ENT_Y + 0.6, e.z); }
+
   function resolveHit(e) {
     if (e.type === "shield") { shieldEnd = gameClock + 6; audio.sfx("shield"); toast("护盾!", 700); return; }
-    if (e.type === "shrink") { shrinkEnd = gameClock + 5; audio.sfx("shrink"); toast("变小! 可躲摆锤", 900); return; }
+    if (e.type === "shrink") {
+      shrinkEnd = gameClock + 5; audio.sfx("shrink"); toast("变小! 可躲摆锤", 900);
+      // TA：药水生效 —— 绿色四角星从身上散开
+      if (fx) {
+        var sp = entPos(e);
+        if (sp) fx.burst(sp.x, sp.y, {
+          count: 12, colors: ["#3ad17e", "#bff5d6", "#ffffff"],
+          shapes: ["spark4", "dot"], speed: [60, 190], size: [2.5, 5], life: [0.4, 0.75], g: 240
+        });
+      }
+      return;
+    }
     if (e.type === "portal") {
       audio.sfx("portal");
       invincibleEnd = gameClock + 1.9;
@@ -676,6 +733,19 @@
       if (warpTimer <= 0) warpTimer = 0.85;
       actionScore += 120;
       toast("传送! +120", 900);
+      // TA：传送门吸入 —— 青紫色的菱形/星光向玩家收拢
+      if (fx) {
+        var pp = project(player.x, ENT_Y + 0.6, playerZ);
+        if (pp) {
+          fx.burst(pp.x, pp.y, {
+            count: 20, colors: ["#59e0ff", "#7a5cff", "#ffffff"],
+            shapes: ["diamond", "spark4", "dot"],
+            speed: [70, 230], size: [2.5, 6], life: [0.4, 0.8], g: 0, drag: 1.8
+          });
+          fx.ring(pp.x, pp.y, { color: "#59e0ff", r0: 12, r1: 90, life: 0.5, lw: 4 });
+          fx.glow(pp.x, pp.y, { color: "#59e0ff", r0: 16, r1: 64, life: 0.55, alpha: 0.9 });
+        }
+      }
       return;
     }
       if (e.type === "banana") {
@@ -683,18 +753,52 @@
       actionScore = Math.max(actionScore - 40, -Math.floor(distance / 6));
       audio.sfx("banana");
       toast("滑倒! -40", 900);
+      // TA：打滑 —— 脚下黄色碎屑向两侧溅开
+      if (fx) {
+        var fp = project(player.x, ENT_Y * 0.5, playerZ);
+        if (fp) fx.burst(fp.x, fp.y, {
+          count: 10, colors: ["#f6d23a", "#ffffff"], shapes: ["dot"],
+          speed: [50, 160], size: [2, 4], life: [0.3, 0.6], g: 380, angle: -Math.PI / 2, spread: 1.4
+        });
+      }
       return;
     }
     var safe = gameClock < shieldEnd || gameClock < invincibleEnd;
     if (e.type === "num") {
       if (e.value === player.value) { doMerge(); }
-      else if (!safe) { combo = 0; audio.sfx("wrong"); toast("数字不符 -15", 700); actionScore = Math.max(actionScore - 15, -Math.floor(distance / 6)); }
+      else if (!safe) {
+        combo = 0; audio.sfx("wrong"); toast("数字不符 -15", 700); actionScore = Math.max(actionScore - 15, -Math.floor(distance / 6));
+        // TA：撞错数字 —— 少量红色碎屑（轻惩罚不吓人）
+        if (fx) {
+          var wp = entPos(e);
+          if (wp) fx.burst(wp.x, wp.y, {
+            count: 6, colors: ["#e5484d"], shapes: ["dot"],
+            speed: [40, 140], size: [2, 4], life: [0.3, 0.55], g: 320
+          });
+        }
+      }
     } else if (e.type === "bomb") {
       if (safe) return;
       combo = 0; audio.sfx("hit"); toast("炸弹!", 700); shake = 0.35; loseLife();
+      // TA：炸弹 —— 橙黄火花炸开
+      if (fx) {
+        var bp = entPos(e);
+        if (bp) fx.burst(bp.x, bp.y, {
+          count: 18, colors: ["#ff8c42", "#ffd166", "#ffffff"],
+          shapes: ["spark", "dot"], speed: [120, 320], size: [2.5, 6], life: [0.35, 0.7], g: 300
+        });
+      }
     } else if (e.type === "pendulum") {
       if (safe) return;
       combo = 0; audio.sfx("pendulum"); toast("被摆锤击中!", 800); shake = 0.4; loseLife();
+      // TA：被摆锤砸中 —— 红色重击粒子
+      if (fx) {
+        var kp = project(player.x, ENT_Y + 0.4, playerZ);
+        if (kp) fx.burst(kp.x, kp.y, {
+          count: 14, colors: ["#c0392b", "#ff8fa3", "#ffffff"],
+          shapes: ["dot", "spark"], speed: [90, 260], size: [2.5, 6], life: [0.35, 0.7], g: 340
+        });
+      }
     }
   }
 
@@ -702,10 +806,35 @@
     var gained = player.value + combo * 2;
     actionScore += gained;
     combo++;
+    var prevColor = valueColor(player.value);
     player.value *= 2;
     refreshPlayerVisual();
     audio.sfx("merge");
     mergeBump = gameClock;
+    // TA：合并反馈 —— 旧值色粒子在玩家身上炸开 + 新值色扩散环 + 飘字。
+    // 3D 场景景深大、粒子显小，参数比 2D 游戏大一档（count/size 上调）才够「炸」。
+    if (fx) {
+      var pp = project(player.x, ENT_Y + 0.6, playerZ);
+      if (pp) {
+        fx.burst(pp.x, pp.y, {
+          count: combo >= 2 ? 30 : 20,
+          colors: [prevColor, "#ffd166", "#ffffff"],
+          shapes: ["star", "diamond", "dot"],
+          speed: [110, 320], size: [4, 9], life: [0.55, 1.05], g: 300
+        });
+        fx.ring(pp.x, pp.y, { color: valueColor(player.value), r0: 12, r1: 80, life: 0.5, lw: 5 });
+        fx.glow(pp.x, pp.y, { color: "#ffd166", r0: 16, r1: 72, life: 0.55, alpha: 0.95 });
+        fx.float(pp.x, pp.y - 36, "+" + gained, { color: "#ffd166", size: 28 });
+      }
+      if (bossPhase && boss) {
+        // Boss 战合并即伤害：Boss 身上同步迸出受击火花
+        var bp = project(boss.mesh.position.x, 2.5, boss.mesh.position.z);
+        if (bp) fx.burst(bp.x, bp.y, {
+          count: 12, colors: ["#ff5d5d", "#ffd166", "#ffffff"],
+          shapes: ["spark", "dot"], speed: [100, 280], size: [2.5, 5.5], life: [0.35, 0.7], g: 260
+        });
+      }
+    }
     if (combo >= 2) {
       var ct = document.getElementById("comboTag");
       ct.textContent = "连击 x" + combo + "!";
@@ -799,6 +928,8 @@
   }
   function bossDefeated() {
     audio.sfx("levelup");
+    // TA：击败 Boss —— 全屏彩纸（终局另有金色闪屏+演出，彩纸会在演出期间继续下落）
+    if (fx) fx.confetti({ count: 90, x0: 0, x1: W, w: W });
     var isFinal = currentLevel >= LEVELS.length - 1;
     var name = BOSSCFG[LEVELS[currentLevel].boss].name;
     hide("bossBar");
@@ -821,6 +952,7 @@
   }
   function levelClear() {
     toast("过关!", 1200);
+    if (fx) fx.confetti({ count: 50, x0: 0, x1: W, w: W });   // 彩纸会自然延续到下一关开场
     if (currentLevel >= LEVELS.length - 1) { victory(); return; }
     maxUnlocked = Math.max(maxUnlocked, currentLevel + 1); saveUnlocked();
     currentLevel++;
@@ -860,6 +992,14 @@
     }
     camera.lookAt(0, 0.8, -12);
     renderer.render(scene, camera);
+    // TA：屏幕空间特效层（环境浮尘 + 粒子/彩纸/飘字），画在 WebGL 之上。
+    // 特效坐标仍是 CSS 像素（project() 返回 W×H 空间），由 setTransform 映射到 dpr 背景
+    if (fx2 && fx) {
+      fx2.setTransform(dpr, 0, 0, dpr, 0, 0);
+      fx2.clearRect(0, 0, W, H);
+      fx.drawBack(fx2);
+      fx.drawFront(fx2);
+    }
   }
 
   // ---------- 主循环 ----------
@@ -869,7 +1009,7 @@
     var dt = (t - lastT) / 1000;
     lastT = t;
     if (dt > 0.05) dt = 0.05;
-
+    if (fx) fx.update(dt);   // 特效推进独立于游戏状态（菜单里环境浮尘也要动）
     // boss 受击缩放回弹
     if (state === STATE.PLAY) update(dt);
     render();

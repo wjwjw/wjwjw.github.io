@@ -27,6 +27,7 @@
   var BEST_KEY = 'memory-match-best';
 
   var FLIP_DUR = 260;        // 单张卡翻面耗时
+  var DUST_TIME = 0.26;      // 翻牌扬尘持续时间（秒），与 FLIP_DUR 等长
   var PEEK_STAGGER = 22;     // 预览结束时逐张扣下的间隔
   var DIR_DEBOUNCE = 110;    // 方向键防抖：老 WebView 的 auto-repeat 会一次连跳多格
   var ASPECT = 1.26;         // 卡片 宽 : 高
@@ -34,6 +35,7 @@
   var audio = new AudioManager();
 
   // TA 特效库（shared/fx.js）：粒子 / 彩纸 / 环境气泡 / 暗角
+  //   + v0.2 的柔光脉冲 glow / 连续发射器 emit（翻牌扬尘）/ 全屏闪光 flash（通关金光）
   var fx = FX.create();
   var bgCache = null;      // 背景预渲染（渐变 + 星屑），每帧只 drawImage
   var backCache = null;    // 牌背预渲染，按当前卡片尺寸生成
@@ -46,7 +48,7 @@
   var moves = 0;
   var matchedPairs = 0;
 
-  var cards = [];            // [{ faceId, up, matched, f, fFrom, fTo, fT0, fDur, matchedT, peekDown }]
+  var cards = [];            // [{ faceId, up, matched, f, fFrom, fTo, fT0, fDur, matchedT, peekDown, dust }]
   var cols = 0, rows = 0, pairCount = 0;
   var cfg = null;
 
@@ -203,6 +205,9 @@
     canvas.height = Math.max(1, Math.round(viewH * dpr));
     canvas.style.width = viewW + 'px';
     canvas.style.height = viewH + 'px';
+
+    // 全屏闪光要用视口尺寸，缺了这句 flash 会静默不生效（STANDARD §10.2）
+    fx.setView(viewW, viewH);
 
     computeLayout();
     prerenderStatics();
@@ -451,7 +456,7 @@
       cards.push({
         faceId: deck[i], up: false, matched: false,
         f: 1, fFrom: 1, fTo: 1, fT0: 0, fDur: 0,
-        matchedT: 0, peekDown: false
+        matchedT: 0, peekDown: false, dust: 0
       });
     }
 
@@ -608,6 +613,7 @@
 
     card.up = true;
     setFlip(card, 1, now, FLIP_DUR);
+    card.dust = DUST_TIME;        // 掀开的一瞬间扬一撮尘（由主循环按帧 emit）
     audio.sfx('flip');
 
     if (firstPick < 0) { firstPick = i; return; }
@@ -639,13 +645,20 @@
       var burstOpts = {
         count: combo > 1 ? 18 : 12,
         colors: [faceColor, '#ffd166', '#ffffff'],
-        shapes: ['star', 'dot'],
+        shapes: ['star', 'spark4', 'dot'],
         speed: [70, 220], size: [2.5, 6.5], life: [0.5, 0.95], g: 260
       };
       fx.burst(acx, acy, burstOpts);
       fx.burst(bcx, bcy, burstOpts);
       fx.ring(acx, acy, { color: faceColor, r1: layout.cw * 0.5, lw: 4 });
       fx.ring(bcx, bcy, { color: faceColor, r1: layout.cw * 0.5, lw: 4 });
+      // 柔光脉冲：用卡面主题色「点亮」两张牌，比扩散环更柔，和 spark4 一起凑出拾取感
+      var glowOpts = {
+        color: faceColor, r0: layout.cw * 0.14, r1: layout.cw * 0.72,
+        life: 0.55, alpha: 0.8
+      };
+      fx.glow(acx, acy, glowOpts);
+      fx.glow(bcx, bcy, glowOpts);
       fx.float((acx + bcx) / 2, Math.min(acy, bcy) - layout.ch * 0.18,
                '+' + gain, { color: '#ffd166', size: Math.max(18, layout.ch * 0.24) });
 
@@ -658,6 +671,7 @@
         // 全部配对：不要「啪」地弹结算卡片，先来一段彩纸雨让孩子爽一下。
         // 用 pending.finish 同时达到三个目的：锁住输入 + 冻结计时 + 拖 1.6s 再弹结算。
         fx.confetti({ count: 90, x0: 0, x1: viewW, w: viewW });
+        fx.flash('#ffd166', 0.35, { alpha: 0.35 });   // 通关金光（依赖 resize 里的 fx.setView）
         pending = { a: -1, b: -1, until: now + 1600, finish: true };
       }
     } else {
@@ -685,6 +699,25 @@
     cards[pending.b].up = false;
     pending = null;
     firstPick = -1;
+  }
+
+  /* 翻牌扬尘：卡片掀开的一瞬间，在牌脚位置扬一撮尘。
+   * emit 是「连续发射器」——按 rate × dt 累积生成，必须每帧调一次；
+   * 放在事件回调里只会喷出一帧的量（≈2 粒），看起来像漏气。 */
+  function updateDust(dt) {
+    for (var i = 0; i < cards.length; i++) {
+      var card = cards[i];
+      if (!card.dust) continue;
+      card.dust -= dt;
+      if (card.dust <= 0) { card.dust = 0; continue; }
+      var p = cardPos(i);
+      fx.emit(p.x + layout.cw / 2, p.y + layout.ch * 0.84, dt, {
+        rate: 40, angle: -Math.PI / 2, spread: 0.85,
+        speed: [12, 46], size: [1.4, 3.4], life: [0.16, 0.34],
+        colors: ['#cfe0ff', '#9fc0ff', '#ffffff'], shapes: ['dot'],
+        g: 30, drag: 2.4
+      });
+    }
   }
 
   // 预览阶段：到点后逐张扣下；全部扣完才解锁输入
@@ -919,6 +952,7 @@
     var now = Date.now();
 
     fx.update(dt);
+    if (cards.length) updateDust(dt);        // 翻牌扬尘：激活期间每帧一次
 
     if (state === STATE.PEEK) updatePeek(now);
     if (pending) updatePending(now);

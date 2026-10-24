@@ -14,6 +14,12 @@
   var selectedChar = CHARACTERS[0];
   var game = null;
   var currentLevel = 0;
+  // 通关庆祝：结算文本/进度在 onWin 里同步写好，覆盖层延后到彩纸演完再弹（STANDARD §10.6）。
+  // 中途离开游戏要靠 cancelWinTimer() 取消，否则结算卡会迟到弹到别的界面上。
+  var winTimer = null;
+  // 结算卡延迟 = 引擎庆祝时长（单一来源：engine.js 的 Game.CELEBRATE，秒 → 毫秒）
+  var WIN_DELAY = Math.round(Game.CELEBRATE * 1000);
+  function cancelWinTimer() { if (winTimer) { clearTimeout(winTimer); winTimer = null; } }
 
   function loadProgress() {
     try { return JSON.parse(localStorage.getItem("maze_progress")) || { unlocked: 1, stars: {} }; }
@@ -28,6 +34,7 @@
     screens.forEach(function (s) { $(s).classList.add("hidden"); });
   }
   function show(id) {
+    if (id !== "winScreen") cancelWinTimer();   // 切到别的界面 → 取消还没弹的通关结算卡
     hideAll();
     $(id).classList.remove("hidden");
     var name = SCREEN_NAME[id];
@@ -98,6 +105,7 @@
   function startLevel(i) {
     currentLevel = i;
     audio.resume(); audio.startBGM();
+    cancelWinTimer();
     hideAll(); setHud(true); Focus.screen = "game";
     $("levelName").textContent = LEVELS[i].name;
     if (!game) game = new Game(canvas, audio, { onHearts: onHearts, onWin: onWin, onLose: onLose });
@@ -115,8 +123,8 @@
     $("hearts").innerHTML = s;
   }
   function onWin(stars) {
-    setHud(false);
     var idx = game.levelIndex;
+    // 结算文本 / 进度立刻落盘（STANDARD §10.6：只推迟覆盖层，不推迟结算内容）
     progress.stars[idx] = Math.max(progress.stars[idx] || 0, stars);
     progress.unlocked = Math.max(progress.unlocked, Math.min(LEVELS.length, idx + 2));
     saveProgress();
@@ -125,7 +133,13 @@
     $("winTitle").textContent = last ? "全部通关！" : "通关啦！";
     $("winTip").textContent = stars === 3 ? "满血肉通关，太厉害啦！" : "收集爱心、躲开危险，争取三星！";
     $("btnNext").style.display = last ? "none" : "";
-    show("winScreen");
+    // 覆盖层等引擎的彩纸/金光演完（engine.js CELEBRATE）再弹，HUD 也一起留到那时再收
+    cancelWinTimer();
+    winTimer = setTimeout(function () {
+      winTimer = null;
+      setHud(false);
+      show("winScreen");
+    }, WIN_DELAY);
   }
   function onLose() {
     setHud(false);
@@ -213,7 +227,10 @@
       case "win": show("selectScreen"); break;
       case "lose": show("selectScreen"); break;
       case "pause": hideAll(); setHud(true); game.resume(); Focus.screen = "game"; break;
-      case "game": game.pause(); show("pauseScreen"); break;
+      case "game":
+        // 通关庆祝（state="win"）期间不暂停：pause() 会被引擎忽略，这里也不该弹暂停层
+        if (game && game.state === "playing") { game.pause(); show("pauseScreen"); }
+        break;
     }
   }
 
@@ -252,7 +269,9 @@
     }
     if (isConfirm(e)) {
       e.preventDefault();
-      if (Focus.screen === "game") { game.pause(); show("pauseScreen"); }  // 游戏中确认 = 暂停
+      if (Focus.screen === "game") {                                        // 游戏中确认 = 暂停
+        if (game && game.state === "playing") { game.pause(); show("pauseScreen"); }
+      }
       else if (!inLauncher()) Focus.confirm();                            // 菜单确认（仅 standalone）
       // 启动器内确认由 tv-controls 激活当前焦点元素
       return;
@@ -326,7 +345,7 @@
   $("btnResume").onclick = function () { hideAll(); setHud(true); game.resume(); Focus.screen = "game"; };
   $("btnRestartPause").onclick = function () { startLevel(currentLevel); };
   $("btnMenuPause").onclick = function () { game.stop(); buildLevelPicker(); show("selectScreen"); };
-  $("btnPause").onclick = function () { if (game) game.pause(); show("pauseScreen"); };
+  $("btnPause").onclick = function () { if (game && game.state === "playing") { game.pause(); show("pauseScreen"); } };
   $("btnRestart").onclick = function () { startLevel(currentLevel); };
   // 静音按钮用 ♪（有声）/ ✕（静音）文字符号，避免 emoji 成方框
   $("btnMute").onclick = function () {

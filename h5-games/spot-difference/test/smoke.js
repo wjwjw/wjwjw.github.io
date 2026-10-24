@@ -30,6 +30,10 @@ const DRAW_PRIMS = ['arc', 'ellipse', 'fillRect', 'strokeRect', 'clearRect', 'fi
 
 function makeCtx() {
   const c = {
+    // fx.js 的 glow（lighter 叠加光斑）与 flash（全屏闪光）要读写这两个属性；
+    // 光斑 / 粒子 / 闪光都靠 drawImage 贴上去（drawImage 在 DRAW_PRIMS 里）。见 STANDARD §10.5
+    globalAlpha: 1,
+    globalCompositeOperation: 'source-over',
     save() {}, restore() {}, translate() {}, scale() {}, rotate() {}, setTransform() {},
     beginPath() {}, closePath() {}, moveTo() {}, lineTo() {}, setLineDash() {},
     createLinearGradient() { return { addColorStop() {} }; },

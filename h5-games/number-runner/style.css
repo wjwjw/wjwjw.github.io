@@ -4,6 +4,9 @@
 
 #app, #stage { position: relative; width: 100%; height: 100%; }
 #game { display: block; margin: 0 auto; background: #0b0e14; touch-action: none; }
+/* TA 屏幕空间特效层：与 #game 同尺寸同居中（CSS 宽高由 JS 钉在 W×H，背景存储按 dpr 放大），
+ * 叠在 WebGL 之上、HUD(6)/传送闪光(6)/覆盖层(10) 之下；不接指针事件。 */
+#fx2d { position: absolute; top: 0; left: 0; right: 0; z-index: 5; display: block; margin: 0 auto; pointer-events: none; }
 
 /* 游戏内 HUD */
 #hud { position: absolute; top: 0; left: 0; right: 0; z-index: 6; padding: 12px; pointer-events: none; }
