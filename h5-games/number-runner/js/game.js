@@ -255,6 +255,13 @@
   }
   window.addEventListener("resize", resize);
 
+  // 切后台 / 失焦自动暂停（电视上按 Home、切台、待机是常态）：
+  // 计时与 BGM 不在后台继续；恢复由玩家手动「继续」，不自动续局。
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden) pauseGame();
+  });
+  window.addEventListener("blur", pauseGame, false);
+
   // 3D 世界坐标 → 屏幕像素坐标（fx2d 覆盖层用）。目标在镜头之后（v.z > 1）返回 null。
   function project(x, y, z) {
     if (!threeOK || !fx2) return null;
@@ -1079,8 +1086,8 @@
       }
       // 死亡瞬间一震（cinematic 分支跳过了主循环里的 shake 应用，这里手动做）
       shake = Math.max(0, shake - dt * 0.6);
-      camera.position.x = (Math.random() - 0.5) * shake * 2;
-      camera.position.y = 3.4 + (Math.random() - 0.5) * shake * 2;
+      camera.position.x = Math.sin(shakeClock * 49) * shake;
+      camera.position.y = 3.4 + Math.cos(shakeClock * 41) * shake * 0.8;
       updateHUD();
       if (cinemaTimer <= 0) { cinematic = false; restoreWarpBg(); gameOver(); }
       return;
@@ -1661,11 +1668,12 @@
   // ---------- 渲染 ----------
   function render() {
     if (!threeOK) return;
-    // 命中震屏
+    // 命中震屏：sin/cos 相位确定性抖动（fx 红线#3）——随机抖在弱机上表现为「闪」，
+    // 且帧率波动时轨迹不可复现；幅度包络仍由 shake 线性衰减控制
     if (shake > 0) {
       shake = Math.max(0, shake - 0.03);
-      camera.position.x = (Math.random() - 0.5) * shake * 2;
-      camera.position.y = 3.4 + (Math.random() - 0.5) * shake * 2;
+      camera.position.x = Math.sin(shakeClock * 49) * shake;
+      camera.position.y = 3.4 + Math.cos(shakeClock * 41) * shake * 0.8;
     } else {
       camera.position.x = 0; camera.position.y = 3.4;
     }
@@ -1682,12 +1690,13 @@
   }
 
   // ---------- 主循环 ----------
-  var lastT = 0;
+  var lastT = 0, shakeClock = 0;   // shakeClock：震屏相位钟（确定性，红线#3）
   function loop(t) {
     if (!lastT) lastT = t;
     var dt = (t - lastT) / 1000;
     lastT = t;
     if (dt > 0.05) dt = 0.05;
+    shakeClock += dt;
     if (fx) fx.update(dt);   // 特效推进独立于游戏状态（菜单里环境浮尘也要动）
     // boss 受击缩放回弹
     if (state === STATE.PLAY) update(dt);

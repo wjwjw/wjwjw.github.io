@@ -286,7 +286,12 @@ h5-games/
 - [ ] 已在 `config.js` 登记，且 `completed` 状态正确。
 - [ ] `icon` 用的是 `assets/icons/<id>.svg` 图片路径（不是 emoji / 汉字），且 `color` 与图标底板色一致（§8.1/8.2）。
 - [ ] 音频在用户首次交互后正常播放；返回键可退出/回上层。
+- [ ] 切后台 / 失焦自动暂停：`visibilitychange`(hidden) 与 `blur` 触发本游戏 pauseGame，
+      计时与 BGM 不在后台继续；恢复由玩家手动操作，不自动续局（每个游戏约 5 行，
+      挂在各自已有的 pauseGame 上）。
 - [ ] 接了 `shared/fx.js` 的游戏：`test/smoke.js` 已同步脚本清单与 canvas stub（见 §10.5）。
+- [ ] 三维（three.js）游戏同样要有 smoke 门禁（参考 `number-runner/test/smoke.js`：
+      ES5 检查 + fx/three 脚本在场 + #fx2d 契约 + 震屏禁用 Math.random）。
 - [ ] 特效遵守性能红线：渲染循环内不建渐变、静态装饰用 `FX.lcg` 固定种子、暗角/背景走预渲染（§10.3）。
 - [ ] 有通关庆祝的游戏：结算文本同步写、覆盖层延后弹，且庆祝期间暂停键失效（见 §10.6）。
 

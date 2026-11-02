@@ -362,6 +362,16 @@
     if (game && game.state !== "idle") game.resize();
   });
 
+  // 切后台 / 失焦自动暂停（电视上按 Home、切台、待机是常态）；恢复由玩家手动继续。
+  // 守卫与 btnPause 相同：只在 "playing" 生效 —— 通关庆祝("win")期间不暂停（见 STANDARD §10.6）。
+  function autoPause() {
+    if (game && game.state === "playing") { game.pause(); show("pauseScreen"); }
+  }
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden) autoPause();
+  });
+  window.addEventListener("blur", autoPause, false);
+
   // 初始
   show("startScreen");
 })();

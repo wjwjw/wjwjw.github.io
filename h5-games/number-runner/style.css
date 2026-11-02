@@ -79,7 +79,9 @@
 #toast.hidden { display: none; }
 
 /* 传送门加速指示：HUD 进度条 + 末段红色脉冲，让「加速何时结束」清晰 */
-#boostBar { display: flex; align-items: center; margin: 8px 4px; gap: 8px; }
+/* 不用 gap：Chrome 47 的 flexbox 没有 gap（STANDARD §6），用子元素 margin 代替 */
+#boostBar { display: flex; align-items: center; margin: 8px 4px; }
+#boostBar .boost-label { margin-right: 8px; }
 #boostBar.hidden { display: none; }
 .boost-label { background: rgba(122, 92, 255, 0.25); border: 1px solid #7a5cff; color: #cdbcff; border-radius: 8px; padding: 4px 10px; font-weight: bold; font-size: 15px; }
 .boost-track { width: 170px; height: 12px; background: rgba(255, 255, 255, 0.12); border: 1px solid #5a2c2c; border-radius: 6px; overflow: hidden; }

@@ -1027,6 +1027,7 @@
     if (state !== STATE.PLAY && state !== STATE.READY) return;
     pauseFrom = state;
     state = STATE.PAUSE;
+    audio.stopBGM();               // 与其他游戏对齐：暂停即停 BGM，恢复再续
     el.pauseStat.textContent = '第 ' + level + ' 关 · 分数 ' + score + ' · 长度 ' + snake.length;
     show('pauseScreen');
     focusFirst('pauseScreen');
@@ -1035,6 +1036,8 @@
   function resumeGame() {
     if (state !== STATE.PAUSE) return;
     hide('pauseScreen');
+    audio.resume();
+    audio.startBGM();
     if (pauseFrom === STATE.READY) {
       // 暂停发生在倒计时里：把倒计时整体后移，别一恢复就直接开跑
       readyUntil = Date.now() + READY_DUR;
@@ -1094,6 +1097,13 @@
   bindClick('btnOverQuit', gotoStart);
 
   window.addEventListener('resize', resize);
+
+  // 切后台 / 失焦自动暂停（电视上按 Home、切台、待机是常态）：
+  // 计时与 BGM 不在后台继续；恢复由玩家手动「继续」，不自动续局。
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) pauseGame();
+  });
+  window.addEventListener('blur', pauseGame, false);
 
   // ============================================================
   //  主循环

@@ -713,6 +713,13 @@
 
   window.addEventListener('resize', resize);
 
+  // 切后台 / 失焦自动暂停（电视上按 Home、切台、待机是常态）：
+  // 计时与 BGM 不在后台继续；恢复由玩家手动「继续」，不自动续局。
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) pauseGame();
+  });
+  window.addEventListener('blur', pauseGame, false);
+
   /*
    * 浏览器返回键陷阱（仅 standalone）。
    *
