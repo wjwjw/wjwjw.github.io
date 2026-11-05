@@ -507,6 +507,8 @@
     // 预览阶段暂停的话，把预览剩余时间整体后移；否则恢复后会直接跳到 PLAY，
     // 牌还全部摊在正面 —— 等于白送答案。
     if (pausedFrom === STATE.PEEK) peekUntil += Date.now() - pauseStart;
+    // 错配扣回 / 收尾结算的截止时刻随暂停整体后移，恢复后按剩余延时继续
+    if (pending) pending.until += Date.now() - pauseStart;
     state = pausedFrom;
     hide('pauseScreen');
     audio.resume();
@@ -955,7 +957,10 @@
     if (cards.length) updateDust(dt);        // 翻牌扬尘：激活期间每帧一次
 
     if (state === STATE.PEEK) updatePeek(now);
-    if (pending) updatePending(now);
+    // pending（错配扣回 / 收尾结算）只在 PLAY 推进：暂停期间不能动，
+    // 否则错配会在暂停层背后被悄悄扣回，最后一张的结算层还会和暂停层叠在一起，
+    // state 变 CLEAR 后 resumeGame 的守卫永久失效 —— 玩家卡死在两个 overlay 上。
+    if (pending && state === STATE.PLAY) updatePending(now);
 
     if (state === STATE.PLAY && !pending) {
       timeLeft -= dt;

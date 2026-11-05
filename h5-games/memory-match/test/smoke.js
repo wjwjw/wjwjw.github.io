@@ -227,6 +227,22 @@ tick(1400);                          // 超过 L1 的 1000ms 翻回延迟
 ok(upFaces(320).length === 2, '错配的两张应已自动扣回，只剩已配对的 2 张');
 
 // ============================================================
+section('5.5) 暂停期间 pending 不得推进（STANDARD §9 回归：暂停不能变成幕后快进）');
+// 复用 5) 的错配对再翻一次，趁翻回延时未到时暂停 2 秒：
+// 修复前 loop 里 `if (pending) updatePending(now)` 无 state 守卫，错配会在暂停层背后被悄悄扣回。
+ok(flipAt(x % COLS, Math.floor(x / COLS)).length === 3, '再次翻开错配的第一张');
+ok(flipAt(y % COLS, Math.floor(y / COLS)).length === 4, '错配两张在展示期内仍朝上');
+W.TVInput.trigger('back');           // 进入暂停
+clock += 2000;                       // 暂停 2 秒，远超翻回延时
+ok(upFaces().length === 4, '暂停期间错配两张不得被悄悄扣回（仍应 4 张朝上）');
+clock += 600;                        // 无守卫时扣回动画已在此走完 —— 这条才咬得住回归
+ok(upFaces().length === 4, '暂停继续推进后错配两张仍应朝上（不得在暂停层背后扣回）');
+W.document.getElementById('btnResume').__fire('click');
+clock += 1000;                       // 推进越过（已随暂停后移的）翻回点
+frame();
+ok(upFaces(400).length === 2, '恢复后错配两张照常扣回（截止时刻应随暂停整体后移）');
+
+// ============================================================
 section('6) 全部配对 → 过关');
 const matched = new Set(p0);
 pairIds.slice(1).forEach(id => {
@@ -237,7 +253,13 @@ pairIds.slice(1).forEach(id => {
   matched.add(m); matched.add(n);
   tick(400);
 });
-tick(900);                           // 等收尾动画 → levelClear
+// 收尾结算延时（1.6s）窗口内暂停：结算层不得在暂停层背后弹出，
+// 否则 state 变 CLEAR 后 resumeGame 的守卫永久失效，两个 overlay 叠在一起卡死。
+W.TVInput.trigger('back');
+tick(900);                           // 暂停 0.9s —— 已越过原本的结算触发点
+ok(els.clearTitle.textContent === '', '暂停期间不得提前弹结算层');
+W.document.getElementById('btnResume').__fire('click');
+tick(900);                           // 恢复后收尾照常走完 → levelClear
 ok(upFaces().length === N, '全部配对后所有 ' + N + ' 张牌都应朝上');
 ok(/全部配对/.test(els.clearTitle.textContent),
    '过关标题应被写入，实际 "' + els.clearTitle.textContent + '"');

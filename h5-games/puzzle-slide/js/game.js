@@ -403,6 +403,11 @@
 
   function pauseGame() {
     if (state !== STATE.PLAY && state !== STATE.PEEK) return;
+    // 记账必须在守卫之后立刻做：自动暂停（blur/visibilitychange）和返回键都直进本函数，
+    // 不在这里设 pauseStart/pausedFrom 的话，恢复时 gap = Date.now() - 0 是天文数字，
+    // peekUntil 会被推到几万年后，看图阶段也会被跳过。
+    pauseStart = Date.now();
+    pausedFrom = state;
     state = STATE.PAUSE;
     audio.stopBGM();
     el.pauseStat.textContent = '第 ' + level + ' 关 · ' + n + '×' + n +
@@ -424,12 +429,6 @@
     hide('pauseScreen');
     audio.resume();
     audio.startBGM();
-  }
-
-  function enterPause() {
-    pauseStart = Date.now();
-    pausedFrom = state;
-    pauseGame();
   }
 
   function levelClear() {
@@ -512,7 +511,7 @@
     if (now - lastBackT < 400) return;
     lastBackT = now;
 
-    if (state === STATE.PLAY || state === STATE.PEEK) enterPause();
+    if (state === STATE.PLAY || state === STATE.PEEK) pauseGame();
     else if (state === STATE.PAUSE) resumeGame();
     else if (state === STATE.CLEAR || state === STATE.OVER) gotoStart();
   }

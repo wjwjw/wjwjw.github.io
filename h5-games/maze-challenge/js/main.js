@@ -123,6 +123,9 @@
     $("hearts").innerHTML = s;
   }
   function onWin(stars) {
+    // 通关即收 BGM：庆祝演出与结算卡在安静里播（与其余游戏 levelClear 的处理一致），
+    // 重开 / 下一关由 startLevel 统一 startBGM。
+    audio.stopBGM();
     var idx = game.levelIndex;
     // 结算文本 / 进度立刻落盘（STANDARD §10.6：只推迟覆盖层，不推迟结算内容）
     progress.stars[idx] = Math.max(progress.stars[idx] || 0, stars);
@@ -142,6 +145,7 @@
     }, WIN_DELAY);
   }
   function onLose() {
+    audio.stopBGM();
     setHud(false);
     show("loseScreen");
   }
@@ -220,16 +224,31 @@
     confirm: function () { if (this.current) this.current.click(); }
   };
 
+  // 统一的「暂停 / 恢复」入口：返回键、OK、按钮、切后台失焦全部走这里，
+  // 保证 BGM 与暂停层成对启停（STANDARD §9：计时与 BGM 不在后台继续）。
+  // 之前各调用点散落 game.pause()/resume()，漏掉 stopBGM/startBGM，暂停后 BGM 会一直播。
+  function pauseGameUI() {
+    if (!game || game.state !== "playing") return;   // 通关庆祝("win")期间不暂停（见 STANDARD §10.6）
+    game.pause();
+    audio.stopBGM();
+    show("pauseScreen");
+  }
+  function resumeGameUI() {
+    hideAll(); setHud(true);
+    game.resume();                                   // 引擎只在 paused 态才会真正恢复
+    if (game && game.state === "playing") { audio.resume(); audio.startBGM(); }
+    Focus.screen = "game";
+  }
+
   function handleBack() {
     switch (Focus.screen) {
       case "start": break;                                   // 最外层，不处理
       case "select": show("startScreen"); break;
       case "win": show("selectScreen"); break;
       case "lose": show("selectScreen"); break;
-      case "pause": hideAll(); setHud(true); game.resume(); Focus.screen = "game"; break;
+      case "pause": resumeGameUI(); break;
       case "game":
-        // 通关庆祝（state="win"）期间不暂停：pause() 会被引擎忽略，这里也不该弹暂停层
-        if (game && game.state === "playing") { game.pause(); show("pauseScreen"); }
+        pauseGameUI();
         break;
     }
   }
@@ -270,7 +289,7 @@
     if (isConfirm(e)) {
       e.preventDefault();
       if (Focus.screen === "game") {                                        // 游戏中确认 = 暂停
-        if (game && game.state === "playing") { game.pause(); show("pauseScreen"); }
+        pauseGameUI();
       }
       else if (!inLauncher()) Focus.confirm();                            // 菜单确认（仅 standalone）
       // 启动器内确认由 tv-controls 激活当前焦点元素
@@ -342,10 +361,10 @@
   $("btnMenuWin").onclick = function () { buildLevelPicker(); show("selectScreen"); };
   $("btnReplayLose").onclick = function () { startLevel(currentLevel); };
   $("btnMenuLose").onclick = function () { buildLevelPicker(); show("selectScreen"); };
-  $("btnResume").onclick = function () { hideAll(); setHud(true); game.resume(); Focus.screen = "game"; };
+  $("btnResume").onclick = resumeGameUI;
   $("btnRestartPause").onclick = function () { startLevel(currentLevel); };
   $("btnMenuPause").onclick = function () { game.stop(); buildLevelPicker(); show("selectScreen"); };
-  $("btnPause").onclick = function () { if (game && game.state === "playing") { game.pause(); show("pauseScreen"); } };
+  $("btnPause").onclick = pauseGameUI;
   $("btnRestart").onclick = function () { startLevel(currentLevel); };
   // 静音按钮用 ♪（有声）/ ✕（静音）文字符号，避免 emoji 成方框
   $("btnMute").onclick = function () {
@@ -365,7 +384,7 @@
   // 切后台 / 失焦自动暂停（电视上按 Home、切台、待机是常态）；恢复由玩家手动继续。
   // 守卫与 btnPause 相同：只在 "playing" 生效 —— 通关庆祝("win")期间不暂停（见 STANDARD §10.6）。
   function autoPause() {
-    if (game && game.state === "playing") { game.pause(); show("pauseScreen"); }
+    pauseGameUI();
   }
   document.addEventListener("visibilitychange", function () {
     if (document.hidden) autoPause();

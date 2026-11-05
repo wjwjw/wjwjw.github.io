@@ -54,6 +54,7 @@
   var wasRight = false;
   var resolveUntil = 0;
   var resolveT = 0;
+  var pauseAt = 0;               // 暂停发生时刻：恢复补偿以它为基准，不能用判定时刻
 
   var timeLeft = 0, timeTotal = 0;
   var lastTickSec = -1;
@@ -313,6 +314,7 @@
 
   function pauseGame() {
     if (state !== STATE.ASK && state !== STATE.RESOLVE) return;
+    pauseAt = Date.now();
     state = STATE.PAUSE;
     audio.stopBGM();
     el.pauseStat.textContent = '第 ' + level + ' 关 · 第 ' + Math.min(qIndex + 1, Quiz.QUESTIONS) +
@@ -324,8 +326,14 @@
   function resumeGame() {
     if (state !== STATE.PAUSE) return;
     state = (chosen >= 0) ? STATE.RESOLVE : STATE.ASK;
-    // 暂停期间流逝的时间要还给玩家，否则暂停就成了惩罚
-    if (resolveT) resolveUntil += Date.now() - resolveT;
+    // 暂停期间流逝的时间要还给玩家，否则暂停就成了惩罚。
+    // 补偿基准必须是暂停时刻：用判定时刻 resolveT 会把暂停前的等待也重算一遍，
+    // 恢复后要重等整个判定停留（答错 1350ms），而不是剩余的一小段。
+    if (chosen >= 0) {
+      var gap = Date.now() - pauseAt;
+      resolveUntil += gap;
+      resolveT += gap;   // 判定动画进度也整体后移，否则恢复瞬间就跳到勾/叉的终态
+    }
     hide('pauseScreen');
     audio.resume();
     audio.startBGM();
