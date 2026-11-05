@@ -53,10 +53,13 @@
   });
 
   // 可选：移动端触屏滑动 → dir（作为键盘操作的附加，不替代）
+  // 注意第三参数必须显式传 false：老 WebView(Chrome 47) 不认识 options 对象，
+  // 会把 { passive: true } 当成 capture=true（STANDARD §6）；这两个回调只读坐标、
+  // 不 preventDefault，行为不受影响。
   var ts = null;
   global.addEventListener('touchstart', function (e) {
     if (e.touches && e.touches[0]) ts = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-  }, { passive: true });
+  }, false);
   global.addEventListener('touchend', function (e) {
     if (!ts || !e.changedTouches || !e.changedTouches[0]) return;
     var t = e.changedTouches[0];
@@ -65,7 +68,7 @@
       emit('dir', Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'));
     }
     ts = null;
-  }, { passive: true });
+  }, false);
 
   var TVInput = {
     on: function (type, cb) { if (handlers[type]) handlers[type].push(cb); return TVInput; },

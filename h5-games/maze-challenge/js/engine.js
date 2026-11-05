@@ -120,7 +120,8 @@
     var tile = Math.floor(Math.min(maxW / this.cols, maxH / this.rows));
     tile = Math.max(20, Math.min(72, tile));
     this.TILE = tile;
-    var dpr = window.devicePixelRatio || 1;
+    // 老 WebView 的 canvas 有尺寸上限，高 dpr 盒子不 clamp 会画不出来；与其余游戏一致（STANDARD §10.7）
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
     this.canvas.width = this.cols * tile * dpr;
     this.canvas.height = this.rows * tile * dpr;
     this.canvas.style.width = this.cols * tile + "px";

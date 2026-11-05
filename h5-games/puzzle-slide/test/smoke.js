@@ -13,6 +13,7 @@
  */
 'use strict';
 
+require('../../test/lint-shared.js');   // 公共层兼容性门禁（STANDARD §6），失败即退出
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');

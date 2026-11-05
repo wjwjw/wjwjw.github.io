@@ -1890,11 +1890,23 @@
     document.body.classList.add("is-touch");
   }
 
-  // 返回键 history 陷阱
-  if (window.history && window.history.pushState) {
-    try { window.history.pushState({ nr: 1 }, ""); } catch (e) {}
-    window.addEventListener("popstate", function () { onBack(); });
+  // 返回键 history 陷阱（与 maze-challenge 的 setupBackButtonTrap 同构，见 docs/STANDARD.md §4）：
+  // 每次 popstate 后必须重新 pushState 占位，否则第二次按返回就真的离开页面；
+  // tv-controls.js 在 iframe load 之后才注入，所以要等 load 再判断，并在 popstate 里再兜底一次。
+  function setupBackTrap() {
+    if (!window.history || !window.history.pushState) return;
+    if (window.__tvControlsInjected) return;    // 启动器内由 launcher 统一处理
+    function mark() { try { window.history.pushState({ nr: 1 }, ""); } catch (e) { /* 某些 WebView 会抛，忽略 */ } }
+    mark();
+    // 与其余游戏一致：先补占位再处理返回；mark 放后面一旦 onBack 抛错就再也补不回占位
+    window.addEventListener("popstate", function () {
+      if (window.__tvControlsInjected) return;  // 注入可能晚于本脚本，这里再兜底一次
+      mark();
+      onBack();
+    });
   }
+  if (document.readyState === "complete") setupBackTrap();
+  else window.addEventListener("load", setupBackTrap);
 
   // ---------- 启动 ----------
   loadBest();
