@@ -990,6 +990,11 @@
     boostActive = false;
     var bReset = document.getElementById("boostBar");
     if (bReset) { bReset.classList.add("hidden"); bReset.classList.remove("warn"); }
+    // HUD 缓存复位：hudLast/hudLastT 是模块级变量，跨局保留；重开局若落在 120ms
+    // 节流窗口内，上一局的 value/score 会短暂留在屏上。复位后立即刷一次，不等节流。
+    hudLast = { value: null, score: null, best: null, comboHidden: null };
+    hudLastT = 0;
+    updateHUD();
     if (camera) { camera.fov = 60; camera.updateProjectionMatrix(); }
     speedMul = 1; shake = 0;
     hide("bossBar");
@@ -1652,16 +1657,42 @@
     for (var i = 0; i < 3; i++) html += '<span class="pip' + (i < lives ? "" : " off") + '"></span>';
     el.innerHTML = html;
   }
+  // HUD DOM 写入「值变了才写 + 120ms 节流」（与其余游戏一致，STANDARD §10.3）：
+  // score 随距离每帧都在变，每帧无条件 getElementById + 写 textContent 会触发启动器
+  // MutationObserver 的全量重扫，而这里还叠着 WebGL 整帧渲染，是唯一没做防护的。
+  // Boss 受击脉冲是 3D 动画（不碰 DOM），必须每帧走，不参与节流。
+  var hudEls = null;
+  var hudLast = { value: null, score: null, best: null, comboHidden: null };
+  var hudLastT = 0;
+
   function updateHUD() {
-    document.getElementById("valueText").textContent = player.value;
-    document.getElementById("scoreText").textContent = score;
-    document.getElementById("bestText").textContent = Math.max(best, score);
-    if (combo < 2) document.getElementById("comboTag").classList.add("hidden");
     if (boss) {
       // Boss 受击脉冲衰减回基础缩放（baseScale，见 buildBossMesh）
       var bs = boss.baseScale || 1;
       boss.mesh.scale.x += (bs - boss.mesh.scale.x) * 0.2;
       boss.mesh.scale.y = boss.mesh.scale.z = boss.mesh.scale.x;
+    }
+    var now = Date.now();
+    if (now - hudLastT < 120) return;
+    hudLastT = now;
+
+    if (!hudEls) hudEls = {
+      value: document.getElementById("valueText"),
+      score: document.getElementById("scoreText"),
+      best: document.getElementById("bestText"),
+      combo: document.getElementById("comboTag")
+    };
+    if (hudLast.value !== player.value) { hudLast.value = player.value; hudEls.value.textContent = player.value; }
+    if (hudLast.score !== score) { hudLast.score = score; hudEls.score.textContent = score; }
+    var b = Math.max(best, score);
+    if (hudLast.best !== b) { hudLast.best = b; hudEls.best.textContent = b; }
+    // 连击标签的显示侧在 doMerge 里自己 remove（:1384 附近），这里只负责隐藏；
+    // combo>=2 时复位标记，否则外部摘掉 hidden 后断连击就再也收不回去。
+    if (combo >= 2) {
+      hudLast.comboHidden = false;
+    } else if (hudLast.comboHidden !== true) {
+      hudLast.comboHidden = true;
+      hudEls.combo.classList.add("hidden");
     }
   }
 

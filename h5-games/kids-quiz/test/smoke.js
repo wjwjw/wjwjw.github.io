@@ -76,12 +76,16 @@ const canvasEl = makeEl('game');
 canvasEl.getContext = function () { return ctx2d; };
 els.game = canvasEl;
 
+// docL / winL：捕获 game.js 注册的 visibilitychange / blur 等监听 —— 暂停行为
+// 断言要真实触发它们（自动暂停走的就是这个入口），不能再是无副作用的空桩
+const docL = {}, winL = {};
 const documentStub = {
   readyState: 'loading',
+  hidden: false,
   getElementById(id) { if (!els[id]) els[id] = makeEl(id); return els[id]; },
   // fx.js 预渲染离屏 canvas（光斑 / 暗角）用
   createElement() { return { width: 0, height: 0, getContext() { return makeCtx(); } }; },
-  addEventListener() {},
+  addEventListener(t, f) { (docL[t] = docL[t] || []).push(f); },
   querySelectorAll() { return []; }
 };
 
@@ -96,7 +100,7 @@ const sandbox = {
   innerWidth: 960,
   innerHeight: 540,
   devicePixelRatio: 1,
-  addEventListener() {},
+  addEventListener(t, f) { (winL[t] = winL[t] || []).push(f); },
   requestAnimationFrame(cb) { rafCb = cb; return 1; },
   setTimeout() { return 0; },
   clearTimeout() {},
@@ -109,12 +113,23 @@ vm.createContext(sandbox);
 ['../shared/input.js', '../shared/nav.js', '../shared/fx.js', 'js/audio.js', 'js/art.js', 'js/quiz.js', 'js/game.js']
   .forEach(rel => {
     const file = path.join(ROOT, rel);
-    vm.runInContext(fs.readFileSync(file, 'utf8'), sandbox, { filename: file });
+    let src = fs.readFileSync(file, 'utf8');
+    // 往内存里的 game.js 注入只读闭包探针（磁盘文件不动）：暂停补偿的精确断言
+    // 要读 resolveT / resolveUntil / pauseAt / state / chosen 这些 IIFE 内部变量
+    if (rel === 'js/game.js') {
+      src = src.replace('var resolveT = 0;',
+        "var resolveT = 0;\n" +
+        "Object.defineProperty(window, '__dbg', { get: function () {" +
+        " return { resolveT: resolveT, resolveUntil: resolveUntil, pauseAt: pauseAt, state: state, chosen: chosen }; } });");
+      if (src.indexOf('__dbg') < 0) throw new Error('kids-quiz smoke 注入锚点未找到: var resolveT = 0');
+    }
+    vm.runInContext(src, sandbox, { filename: file });
   });
 
 const W = sandbox;
 function frame() { const cb = rafCb; rafCb = null; if (cb) cb(clock); }
 function tick(ms) { clock += ms; frame(); }
+function advance(ms) { clock += ms; }   // 只推时钟不跑帧：模拟「后台停留」
 
 // ============================================================
 section('1) art.js —— 图形素材库');
@@ -288,6 +303,43 @@ tick(600);
 ok(els.qText.textContent === qBefore, '答错后应停留展示正确答案，不能立刻翻页');
 tick(900);
 ok(els.qText.textContent !== qBefore, '停留结束后应进入下一题');
+
+// ============================================================
+section('4.5) 暂停/恢复补偿 —— RESOLVE 态切后台（真实 visibilitychange 入口）');
+// 修复前：恢复补偿以判定时刻 resolveT 为基准，会把暂停前的等待也重算一遍，
+// 恢复后要重等整个判定停留。核心行为在这里固化：剩余停留原样保留、
+// resolveT 随暂停整体后移（勾/叉动画进度不跳变）。
+els.btnStart.__fire('click');            // 从 4) 的中途状态重开一局
+tick(0);
+advance(200);
+W.TVInput.trigger('confirm');            // 选当前光标选项 → 进入 RESOLVE
+const d1 = W.__dbg;
+ok(d1.chosen >= 0, '应已选中某项并进入判定态，实际 chosen=' + d1.chosen);
+const HOLD = d1.resolveUntil - d1.resolveT;
+ok(HOLD > 0, '判定停留时长应为正，实际 ' + HOLD);
+
+advance(300); frame();                   // 判定停留已走掉 300ms
+const remainBefore = W.__dbg.resolveUntil - clock;
+ok(remainBefore > 0, '暂停前应仍处在判定停留内，实际剩余 ' + remainBefore);
+
+documentStub.hidden = true;
+(docL.visibilitychange || []).forEach(f => f({}));   // 真实走 visibilitychange 自动暂停
+ok(W.__dbg.state === 'pause', '切后台应进入暂停态，实际 ' + W.__dbg.state);
+ok(W.__dbg.pauseAt === clock, 'pauseAt 应等于暂停时刻');
+
+advance(10000);                          // 后台停留 10 秒（不跑帧）
+els.btnResume.__fire('click');
+const d2 = W.__dbg;
+ok(d2.resolveUntil - clock === remainBefore,
+   '恢复后判定剩余时间应原样保留（修复前会重等整个 HOLD），实际 ' +
+   (d2.resolveUntil - clock) + ' vs ' + remainBefore);
+ok(d2.resolveT - d1.resolveT === 10000,
+   'resolveT 应按暂停时长整体后移（勾/叉动画进度不跳变），实际增量 ' + (d2.resolveT - d1.resolveT));
+ok(d2.resolveUntil - d2.resolveT === HOLD,
+   '判定停留总时长应不变，实际 ' + (d2.resolveUntil - d2.resolveT) + ' vs ' + HOLD);
+
+advance(remainBefore); frame();
+ok(W.__dbg.state !== 'resolve', '剩余停留走完应翻到下一题，实际 ' + W.__dbg.state);
 
 // ============================================================
 section('5) 源码静态约束（STANDARD §6）');

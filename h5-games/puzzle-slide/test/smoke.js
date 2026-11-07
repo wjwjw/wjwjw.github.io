@@ -78,11 +78,15 @@ const els = {};
 const canvasEl = makeEl('game');
 els.game = canvasEl;
 
+// docL / winL：捕获 game.js 注册的 visibilitychange / blur 等监听 —— 暂停行为
+// 断言要真实触发它们（自动暂停走的就是这个入口），不能再是无副作用的空桩
+const docL = {}, winL = {};
 const documentStub = {
   readyState: 'loading',
+  hidden: false,
   getElementById(id) { if (!els[id]) els[id] = makeEl(id); return els[id]; },
   createElement() { return makeEl('offscreen'); },
-  addEventListener() {},
+  addEventListener(t, f) { (docL[t] = docL[t] || []).push(f); },
   querySelectorAll() { return []; }
 };
 
@@ -97,7 +101,7 @@ const sandbox = {
   innerWidth: 960,
   innerHeight: 540,
   devicePixelRatio: 1,
-  addEventListener() {},
+  addEventListener(t, f) { (winL[t] = winL[t] || []).push(f); },
   requestAnimationFrame(cb) { rafCb = cb; return 1; },
   setTimeout() { return 0; },
   clearTimeout() {},
@@ -117,6 +121,7 @@ const W = sandbox;
 const P = W.Puzzle;
 function frame() { const cb = rafCb; rafCb = null; if (cb) cb(clock); }
 function tick(ms) { clock += ms; frame(); }
+function advance(ms) { clock += ms; }   // 只推时钟不跑帧：模拟「后台停留」
 
 // 可重复的随机源（LCG），跑测时才稳定
 function rng(seed) {
@@ -313,6 +318,28 @@ for (let run = 0; run < RUNS; run++) {
   els.btnOverQuit.__fire('click');
   tick(0);
   ok(W.__puzzle.state === 'start', '结束后返回标题应回到 start，实际 ' + W.__puzzle.state);
+
+  // ============================================================
+  section('4.5) 暂停/恢复补偿 —— PEEK 态切后台（真实 visibilitychange 入口）');
+  // 修复前 blur/visibilitychange 直调 pauseGame() 而 pauseStart 只在 enterPause()
+  // 里赋值：恢复时 gap = Date.now() - 0 ≈ 1.7e12ms，peekUntil 被推到几万年后，
+  // 看图阶段被跳过或永远卡住。核心行为在这里固化。
+  els.btnStart.__fire('click');          // 从 4) 的结束状态重开一局
+  tick(0);
+  ok(W.__puzzle.state === 'peek', '开局应先看图，实际 ' + W.__puzzle.state);
+
+  documentStub.hidden = true;
+  (docL.visibilitychange || []).forEach(f => f({}));   // 真实走 visibilitychange 自动暂停
+  ok(W.__puzzle.state === 'pause', '切后台应暂停，实际 ' + W.__puzzle.state);
+
+  advance(10000);                        // 后台停留 10 秒（不跑帧）
+  els.btnResume.__fire('click');
+  ok(W.__puzzle.state === 'peek',
+     '恢复后应回到看图（修复前 pauseStart=0 会跳过看图），实际 ' + W.__puzzle.state);
+
+  tick(5000);                            // 有限的 5 秒应足够走完看图剩余时间
+  ok(W.__puzzle.state === 'play',
+     '看图剩余时间走完应进入拼图（修复前 peekUntil 被推到几万年后会永远卡住），实际 ' + W.__puzzle.state);
 
   // ============================================================
   section('5) 源码静态约束（STANDARD §6）');

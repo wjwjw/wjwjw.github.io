@@ -124,5 +124,64 @@ section('6) 脚本可被解析（语法完整性）');
   ok(!err, rel + ' 应能被解析，实际 ' + err);
 });
 
+// ============================================================
+section('7) 暂停/恢复 BGM 成对启停（vm 抽取 pauseGameUI / resumeGameUI 真实源码）');
+// ============================================================
+// 修复前各暂停/恢复调用点散落 game.pause()/resume()，漏掉 stopBGM/startBGM，
+// 暂停、切后台、通关 BGM 都继续播（STANDARD §9）。统一入口的配对行为在这里固化。
+{
+  const raw = fs.readFileSync(path.join(ROOT, 'js/main.js'), 'utf8');
+  const s0 = raw.indexOf('function pauseGameUI');
+  const s1 = raw.indexOf('function handleBack', s0);
+  ok(s0 > 0 && s1 > s0, '应能按标记切出 pauseGameUI/resumeGameUI 片段（门禁自身基准）');
+  if (s0 > 0 && s1 > s0) {
+    const calls = { stopBGM: 0, startBGM: 0, audioResume: 0, paused: 0, resumed: 0, shown: '', hidAll: 0 };
+    const mz = {
+      game: null,
+      Focus: {},
+      audio: {
+        stopBGM() { calls.stopBGM++; },
+        startBGM() { calls.startBGM++; },
+        resume() { calls.audioResume++; }
+      },
+      show(id) { calls.shown = id; },
+      hideAll() { calls.hidAll++; },
+      setHud() {}
+    };
+    vm.createContext(mz);
+    vm.runInContext(raw.slice(s0, s1), mz, { filename: 'pause-resume-extract' });
+    const mkGame = (state) => ({
+      state,
+      pause() { calls.paused++; this.state = 'paused'; },
+      resume() { if (this.state === 'paused') { calls.resumed++; this.state = 'playing'; } }
+    });
+
+    // 通关庆祝("win")期间不暂停：BGM 也不该被收（守卫见 STANDARD §10.6）
+    mz.game = mkGame('win');
+    mz.pauseGameUI();
+    ok(calls.paused === 0 && calls.stopBGM === 0, '非 playing 态不应暂停、不应收 BGM');
+
+    // playing → 暂停：game.pause() + stopBGM() + 弹暂停层，三件事必须成对
+    mz.game = mkGame('playing');
+    mz.pauseGameUI();
+    ok(calls.paused === 1 && calls.stopBGM === 1 && calls.shown === 'pauseScreen',
+       '暂停应成对执行 game.pause() + stopBGM() + show(pauseScreen)');
+
+    // 恢复：resume() + 音频 resume() + startBGM() 成对
+    mz.resumeGameUI();
+    ok(calls.resumed === 1 && calls.audioResume === 1 && calls.startBGM === 1 &&
+       calls.hidAll === 1 && mz.Focus.screen === 'game',
+       '恢复应成对执行 game.resume() + audio.resume() + startBGM() 并回游戏界面');
+
+    // 不在 paused 态恢复（如已 idle）：引擎不会真正恢复 → 不得误起 BGM
+    mz.game = mkGame('idle');
+    const startBGM0 = calls.startBGM;
+    const resumed0 = calls.resumed;
+    mz.resumeGameUI();
+    ok(calls.startBGM === startBGM0 && calls.resumed === resumed0,
+       '引擎未真正恢复（非 paused→playing）时不应起 BGM');
+  }
+}
+
 console.log('\n' + (fail === 0 ? '✅ ALL PASS' : '❌ FAILED') + '  ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail === 0 ? 0 : 1);

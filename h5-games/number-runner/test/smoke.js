@@ -131,5 +131,98 @@ section('7) 脚本可被解析（语法完整性）');
   ok(!err, rel + ' 应能被解析，实际 ' + err);
 });
 
+// ============================================================
+section('8) HUD 缓存状态机（vm 抽取真实源码 + 假 DOM / 假时钟）');
+// ============================================================
+// updateHUD 有「值变才写 + 120ms 节流 + comboTag 标记复位」的非平凡状态逻辑，
+// 但整个游戏进不了 vm（three.js / WebGL）。从 game.js 原文按标记切出
+// hudEls / hudLast / hudLastT / updateHUD 片段，配假 DOM（写入计数）+ 假时钟执行，
+// 把节流、值变、连击标签起落、重开局立即刷新全部变成行为断言。
+const nrRaw = fs.readFileSync(path.join(ROOT, 'js/game.js'), 'utf8');
+const hudStart = nrRaw.indexOf('var hudEls = null;');
+const hudEnd = nrRaw.indexOf('// ---------- 渲染', hudStart);
+ok(hudStart > 0 && hudEnd > hudStart, '应能按标记切出 updateHUD 片段（门禁自身基准）');
+if (hudStart > 0 && hudEnd > hudStart) {
+  let clock = 1000000;
+  let lookups = 0;
+  const els = {};
+  function makeEl() {
+    const st = { text: '', hidden: false, writes: 0 };
+    return {
+      get textContent() { return st.text; },
+      set textContent(v) { st.text = v; st.writes++; },
+      classList: {
+        add(c) { if (c === 'hidden') st.hidden = true; },
+        remove(c) { if (c === 'hidden') st.hidden = false; }
+      },
+      __st: st
+    };
+  }
+  ['valueText', 'scoreText', 'bestText', 'comboTag'].forEach(id => { els[id] = makeEl(); });
+  const sb = {
+    document: { getElementById(id) { lookups++; return els[id] || (els[id] = makeEl()); } },
+    Date: { now() { return clock; } },
+    player: { value: 2 },
+    score: 0, best: 0, combo: 0, boss: null
+  };
+  vm.createContext(sb);
+  vm.runInContext(nrRaw.slice(hudStart, hudEnd), sb, { filename: 'updateHUD-extract' });
+
+  // 首帧：全量写入，元素引用进缓存，combo>=2 复位标记
+  clock += 200;
+  sb.score = 120; sb.player.value = 8; sb.combo = 3; sb.best = 500;
+  sb.updateHUD();
+  ok(els.scoreText.__st.writes === 1 && els.valueText.textContent === 8 && els.scoreText.textContent === 120,
+     '首次调用应写入正确的 value/score');
+  ok(els.comboTag.__st.hidden === false, 'combo>=2 时不应隐藏连击标签');
+  ok(sb.hudLast.comboHidden === false, 'combo>=2 应复位 comboHidden 标记（否则断连击后收不回）');
+  lookups = 0;
+
+  // 120ms 节流窗口内：不查 DOM、不写 DOM
+  clock += 50; sb.score = 130;
+  sb.updateHUD();
+  ok(els.scoreText.__st.writes === 1 && lookups === 0, '120ms 内不应重复查/写 DOM（元素引用应已缓存）');
+
+  // Boss 受击脉冲是 3D 动画，不走节流
+  sb.boss = { baseScale: 1.2, mesh: { scale: { x: 1, y: 1, z: 1 } } };
+  clock += 10;
+  sb.updateHUD();
+  ok(sb.boss.mesh.scale.x > 1, 'Boss 脉冲在节流窗口内仍应每帧执行（不碰 DOM，不参与节流）');
+  sb.boss = null;
+
+  // 越过窗口：补写被节流期间变化的值；值未变不写；值变才写
+  clock += 200; sb.updateHUD();
+  ok(els.scoreText.__st.writes === 2 && els.scoreText.textContent === 130, '越过节流窗口应补写变化的值');
+  clock += 200; sb.updateHUD();
+  ok(els.scoreText.__st.writes === 2, '值未变不应写');
+  sb.score = 140; clock += 200; sb.updateHUD();
+  ok(els.scoreText.__st.writes === 3, '值变了应写');
+
+  // 连击标签全链路：combo>=2（复位标记 + doMerge 外部摘 hidden）→ 断连击收回
+  clock += 200; sb.combo = 0; sb.updateHUD();
+  ok(els.comboTag.__st.hidden === true, '断连击应隐藏标签');
+  sb.combo = 4; clock += 200; sb.updateHUD();
+  els.comboTag.classList.remove('hidden');            // 模拟 doMerge 的显示侧
+  ok(sb.hudLast.comboHidden === false, 'combo>=2 再次复位标记');
+  sb.combo = 0; clock += 200; sb.updateHUD();
+  ok(els.comboTag.__st.hidden === true, '外部摘掉 hidden 后再断连击，标签仍应收回');
+
+  // 重开局：执行从 startLevel 源码抽出的「真实」复位片段（不是手写模拟），
+  // 即使正落在节流窗口内也必须立即显示新一局的值
+  const slBody = functionBody(stripComments(nrRaw), 'startLevel');
+  const resetMatch = slBody.match(/hudLast\s*=\s*\{[^}]*\};\s*hudLastT\s*=\s*0;/);
+  ok(!!resetMatch, 'startLevel 应复位 hudLast/hudLastT（模块级缓存跨局保留，重开落在节流窗口内会短暂显示上一局数字）');
+  ok(/updateHUD\(\)/.test(slBody), 'startLevel 复位后应立即调一次 updateHUD，不等 120ms 节流');
+  // 行为断言无条件执行：复位块在 → 跑真实复位片段；缺失 → 按「不复位」对照跑同一条
+  // 断言，此刻必然失败。核心断言不允许被 if 跳过、只剩两条源码结构断言兜底。
+  clock += 10;                         // 距上次写入 < 120ms，正落在节流窗口内
+  sb.score = 0; sb.player.value = 2; sb.combo = 0; sb.best = 500;
+  if (resetMatch) vm.runInContext(resetMatch[0], sb);
+  vm.runInContext('updateHUD();', sb);
+  ok(els.valueText.textContent === 2 && els.scoreText.textContent === 0,
+     '重开局（节流窗口内）应立即显示新 value=2 / score=0，实际 ' +
+     els.valueText.textContent + ' / ' + els.scoreText.textContent);
+}
+
 console.log('\n' + (fail === 0 ? '✅ ALL PASS' : '❌ FAILED') + '  ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail === 0 ? 0 : 1);
