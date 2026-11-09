@@ -160,6 +160,18 @@ window.APP_CONFIG = {
       tvControls: true
     },
 
+    {
+      id: "brick-breaker",
+      title: "弹球打砖块",
+      subtitle: "左右按住移动挡板 · 打光砖块过关",
+      icon: "../h5-games/assets/icons/brick-breaker.svg",
+      folder: "brick-breaker",
+      entry: "index.html",
+      completed: true,
+      color: "#b84ad6",
+      tvControls: true
+    },
+
     /* ↓↓↓ 后续新游戏照抄这一段，completed 先设 false 即可占位 ↓↓↓ */
     {
       id: "coming-soon",

@@ -1,0 +1,198 @@
+/*
+ * style.css —— 弹球打砖块
+ * 兼容目标：MiTV4A / Android 6 / WebView 约 Chromium 47
+ * 不使用 grid / gap / inset / color-mix / CSS 变量 / min() / max() / clamp()
+ * （见 docs/STANDARD.md 第 6 节；注意本文件只用 max-width 这类属性名，不写函数调用）
+ */
+
+#app {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #080d1a;
+}
+
+/* ---------- 游戏内 HUD ---------- */
+#hud {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 10px 12px 0;
+  pointer-events: none;
+  z-index: 5;
+}
+#hud.hidden { display: none; }
+
+.hud-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+}
+.hud-pill {
+  margin: 0 5px 7px;
+  background: rgba(14, 22, 44, 0.92);
+  border: 2px solid #3a3a68;
+  border-radius: 999px;
+  padding: 5px 17px;
+  font-size: 17px;
+  color: #d8dcff;
+  white-space: nowrap;
+}
+.hud-pill b { color: #ffd166; font-weight: 700; }
+#livesText { color: #ff9ab6; letter-spacing: 2px; }
+
+#toast {
+  width: 360px;
+  margin: 10px auto 0;
+  padding: 9px 0;
+  text-align: center;
+  font-size: 20px;
+  font-weight: 700;
+  border-radius: 12px;
+  background: rgba(14, 22, 44, 0.94);
+  border: 2px solid #3a3a68;
+  color: #d8dcff;
+}
+#toast.hidden { display: none; }
+#toast.good { color: #9ae8c0; border-color: #2f6f5a; }
+#toast.warn { color: #ffb35c; border-color: #7a5320; }
+
+/* ---------- 覆盖层渐入 ----------
+   父覆盖层只动 background-color，子卡片才动 opacity 与位移：
+   启动器注入的 tv-controls.js 用 opacity 判断元素是否可见，父层淡入会让自动聚焦失效。 */
+@-webkit-keyframes bbBackdropIn {
+  from { background-color: rgba(0, 0, 0, 0); }
+}
+@keyframes bbBackdropIn {
+  from { background-color: rgba(0, 0, 0, 0); }
+}
+@-webkit-keyframes bbCardIn {
+  from { opacity: 0; -webkit-transform: translateY(20px) scale(0.94); }
+  to   { opacity: 1; -webkit-transform: translateY(0) scale(1); }
+}
+@keyframes bbCardIn {
+  from { opacity: 0; transform: translateY(20px) scale(0.94); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.overlay.anim-in {
+  -webkit-animation: bbBackdropIn 0.34s ease-out both;
+  animation: bbBackdropIn 0.34s ease-out both;
+}
+.overlay.anim-in .card {
+  -webkit-animation: bbCardIn 0.44s cubic-bezier(0.22, 0.9, 0.3, 1) both;
+  animation: bbCardIn 0.44s cubic-bezier(0.22, 0.9, 0.3, 1) both;
+}
+
+/* ---------- 覆盖层卡片 ---------- */
+.overlay .card {
+  background: #141b33;
+  border: 2px solid #3a3a68;
+  border-radius: 18px;
+  padding: 26px 34px 30px;
+  width: 92%;
+  max-width: 660px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+}
+.title-tag {
+  display: inline-block;
+  font-size: 13px;
+  letter-spacing: 3px;
+  color: #d99aff;
+  border: 2px solid #4b3a75;
+  border-radius: 999px;
+  padding: 3px 15px;
+  margin-bottom: 10px;
+}
+.overlay h1 {
+  font-size: 46px;
+  font-weight: 700;
+  letter-spacing: 6px;
+  color: #dfaaff;
+  margin: 6px 0 8px;
+}
+.overlay h2 {
+  font-size: 28px;
+  font-weight: 700;
+  color: #dfaaff;
+  margin: 4px 0 12px;
+}
+.subtitle {
+  font-size: 17px;
+  color: #a9b2d8;
+  line-height: 1.7;
+  margin: 0 0 14px;
+}
+.howto {
+  max-width: 540px;
+  margin: 0 auto 16px;
+  text-align: left;
+}
+.howto p {
+  font-size: 15.5px;
+  line-height: 1.8;
+  color: #c3c9e6;
+  margin: 0 0 7px;
+}
+.howto b { color: #ffd166; }
+
+.best-line { font-size: 16px; color: #a9b2d8; margin: 0 0 18px; }
+.best-line b { color: #d99aff; font-size: 20px; }
+
+.hint { font-size: 14px; color: #7e88b4; margin: 16px 0 0; }
+
+.big-btn {
+  background: #8b3fb0;
+  border-color: #5f2780;
+  color: #fdf6ff;
+  font-size: 22px;
+  font-weight: 700;
+}
+.big-btn:hover, .big-btn:focus, .big-btn.sel { background: #a553cb; }
+
+.text-btn {
+  min-width: 130px;
+  padding: 10px 18px;
+  font-size: 17px;
+}
+
+.btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+}
+.btn-row > * { margin: 6px; }
+
+.score-box {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  margin: 6px 0 16px;
+}
+.score-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 132px;
+  margin: 6px 10px;
+  padding: 10px 22px;
+  background: #1b2444;
+  border: 2px solid #3a3a68;
+  border-radius: 14px;
+}
+.score-label { font-size: 13px; color: #9aa4cf; margin-bottom: 2px; }
+.score-num { font-size: 30px; font-weight: 700; color: #ffd166; }
+
+@media (max-width: 560px) {
+  .overlay .card { padding: 20px 18px 24px; }
+  .overlay h1 { font-size: 32px; letter-spacing: 3px; }
+  .overlay h2 { font-size: 22px; }
+  .hud-pill { font-size: 14px; padding: 4px 12px; }
+  #toast { width: 260px; font-size: 17px; }
+  .score-item { min-width: 112px; padding: 8px 14px; }
+  .score-num { font-size: 24px; }
+}

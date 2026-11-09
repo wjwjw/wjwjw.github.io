@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>弹球打砖块 · 六关挑战</title>
+  <link rel="stylesheet" href="../shared/base.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div id="app">
+  <div id="stage">
+    <canvas id="game"></canvas>
+
+    <!-- 游戏内 HUD（DOM 覆盖层，由 game.js 更新） -->
+    <div id="hud" class="hidden">
+      <div class="hud-top">
+        <div class="hud-pill">第 <b id="levelText">1</b> 关</div>
+        <div class="hud-pill">分数 <b id="scoreText">0</b></div>
+        <div class="hud-pill">最高 <b id="bestText">0</b></div>
+        <div class="hud-pill">剩余 <b id="leftText">0</b></div>
+        <div class="hud-pill">生命 <b id="livesText">♥♥♥</b></div>
+      </div>
+      <div id="toast" class="hidden"></div>
+    </div>
+  </div>
+
+  <!-- 开始界面 -->
+  <div id="startScreen" class="overlay">
+    <div class="card">
+      <div class="title-tag">BRICK BREAKER</div>
+      <h1>弹球打砖块</h1>
+      <p class="subtitle">左右移动挡板 · 把砖块全部打光</p>
+      <div class="howto">
+        <p>用<b>左右方向键 / A D</b> 按住移动挡板，球会自己弹来弹去。</p>
+        <p>把上面的<b>彩色砖块</b>全部打光就过关；连着打中会有连击加分。</p>
+        <p>带<b>金色星星</b>的砖块打碎后会掉星星，用挡板接住加 30 分。</p>
+        <p>球掉下去<b>不会马上结束</b>，只掉一颗心，一共有 3 颗心。</p>
+        <p>发球前有 3-2-1 预备，想快点开始就按 <b>OK</b>。</p>
+      </div>
+      <p class="best-line">历史最高：<b id="startBest">0</b></p>
+      <button id="btnStart" class="big-btn tv-focus" data-tv-focus autofocus>开始游戏</button>
+      <p class="hint">左右 / WASD 移动 · OK 发球与暂停 · 返回键暂停</p>
+    </div>
+  </div>
+
+  <!-- 暂停 -->
+  <div id="pauseScreen" class="overlay hidden">
+    <div class="card">
+      <h2>暂停中</h2>
+      <p id="pauseStat" class="subtitle"></p>
+      <div class="btn-row">
+        <button id="btnResume" class="big-btn tv-focus" data-tv-focus>继续游戏</button>
+        <button id="btnRestart" class="text-btn tv-focus" data-tv-focus>重新开始</button>
+        <button id="btnMute" class="text-btn tv-focus" data-tv-focus>声音</button>
+        <button id="btnQuit" class="text-btn tv-focus" data-tv-focus>返回标题</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 过关 / 通关（同一张卡，文案由 game.js 同步写，显示延后到庆祝之后） -->
+  <div id="clearScreen" class="overlay hidden">
+    <div class="card">
+      <div id="clearTag" class="title-tag">LEVEL 1</div>
+      <h2 id="clearTitle">第 1 关完成</h2>
+      <p id="clearStat" class="subtitle"></p>
+      <div class="score-box">
+        <div class="score-item"><span class="score-label">当前分数</span><span id="clearScore" class="score-num">0</span></div>
+      </div>
+      <p id="clearTip" class="subtitle"></p>
+      <div class="btn-row">
+        <button id="btnNext" class="big-btn tv-focus" data-tv-focus>下一关</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 结束 -->
+  <div id="overScreen" class="overlay hidden">
+    <div class="card">
+      <div class="title-tag">GAME OVER</div>
+      <h2>这局结束啦</h2>
+      <div class="score-box">
+        <div class="score-item"><span class="score-label">本局分数</span><span id="overScore" class="score-num">0</span></div>
+        <div class="score-item"><span class="score-label">到达关卡</span><span id="overLevel" class="score-num">1</span></div>
+        <div class="score-item"><span class="score-label">历史最高</span><span id="overBest" class="score-num">0</span></div>
+      </div>
+      <p id="overTip" class="subtitle"></p>
+      <div class="btn-row">
+        <button id="btnReplay" class="big-btn tv-focus" data-tv-focus>再来一次</button>
+        <button id="btnOverQuit" class="text-btn tv-focus" data-tv-focus>返回标题</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 经典脚本（兼容 Android 6 WebView，不用 ES module） -->
+<script src="../shared/input.js"></script>
+<!-- TV 启动器兜底：遥控 BACK 由 MainActivity 转发到 TVInput 的 back 事件 -->
+<script>window.TVLauncher=window.TVLauncher||{handleBack:function(){try{window.TVInput&&window.TVInput.trigger('back')}catch(e){}}};</script>
+<script src="../shared/nav.js"></script>
+<script src="../shared/fx.js"></script>
+<script src="js/logic.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
