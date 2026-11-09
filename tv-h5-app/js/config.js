@@ -49,7 +49,7 @@ window.APP_CONFIG = {
    *   icon      菜单卡片用的大图标。★ 统一用图片路径，不要用 emoji / 汉字：
    *               · 目标设备 MiTV4A（Android 6 / WebView≈Chromium 47）渲染不了彩色 emoji，会画成 □ 方框
    *               · 汉字当图标风格、字重、视觉重心各不一致，九个游戏九个样
-   *             统一图标集在 h5-games/assets/icons/（九枚像素风，含 SVG + PNG 64/128），
+   *             统一图标集在 h5-games/assets/icons/（每个游戏一枚像素风，含 SVG + PNG 64/128），
    *             相对本页路径写 "../h5-games/assets/icons/<id>.svg"。
    *             规范见 h5-games/assets/icons/SPEC.md，总览页 icons/preview.html。
    *   folder    h5-games/ 下的子目录名
@@ -169,6 +169,18 @@ window.APP_CONFIG = {
       entry: "index.html",
       completed: true,
       color: "#b84ad6",
+      tvControls: true
+    },
+
+    {
+      id: "sokoban",
+      title: "推箱子",
+      subtitle: "经典搬运 · 方向键移动，把箱子推上目标点",
+      icon: "../h5-games/assets/icons/sokoban.svg",
+      folder: "sokoban",
+      entry: "index.html",
+      completed: true,
+      color: "#b5722e",
       tvControls: true
     },
 

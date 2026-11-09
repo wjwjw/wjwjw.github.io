@@ -7,6 +7,7 @@
 ## 文档导航
 - [STANDARD.md](./STANDARD.md) —— 核心规范：目录结构、输入契约、兼容性约束、资源、启动器接入、验收清单（**新增游戏必读**）
 - 启动器接入指南：`../tv-h5-app/GAME_DEV_GUIDE.md`（聚焦「如何接入启动器」，规则以本目录 `STANDARD.md` 为准）
+- 真机验收工具：`../test/cdp-verify.js` —— 自起静态服务与 headless Chrome，按 §9 检查脚本加载、多视口布局、遥控器按键与启动器 iframe（用法见脚本头注释）
 
 ## 三个关键决策（初始版结论）
 1. **不强制统一游戏引擎。** 采用「契约式」约束：任何引擎（原生 canvas / Phaser / three.js 等）只要满足 `STANDARD.md` 的**输入契约、独立可运行、兼容性约束**即可。理由：现有 `maze-challenge` 是手绘 canvas 实现，强制换引擎重写成本太高，且旧电视 WebView 有兼容/性能风险。
@@ -24,7 +25,7 @@
 | TV 基础样式 | `shared/base.css` | 暗色 10-foot UI、焦点环、全屏 overlay |
 | 特效公共层 | `shared/fx.js` | `FX`：粒子 / 彩纸 / 飘字 / 扩散环 / 环境微粒 / 震屏 / 连续发射器·柔光脉冲·全屏闪光 / 预渲染光斑·暗角（见 `STANDARD.md` §10） |
 | 公共素材 | `assets/` | 背景/音效/图标/字体（见其内 README） |
-| 像素风游戏图标 | `assets/icons/` | 九枚一套（16×16 网格、统一底板/描边/高光、每枚一主题色），SVG + PNG 64/128；规范见 `assets/icons/SPEC.md`，总览页 `assets/icons/preview.html` |
+| 像素风游戏图标 | `assets/icons/` | 每游戏一枚（16×16 网格、统一底板/描边/高光、每枚一主题色），SVG + PNG 64/128；规范见 `assets/icons/SPEC.md`，总览页 `assets/icons/preview.html` |
 
 ## 如何演进
 - 每开发一款新游戏，把踩到的坑、新增的通用需求补进 `STANDARD.md` 对应章节。

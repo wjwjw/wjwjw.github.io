@@ -266,6 +266,72 @@ ICONS = [
         ],
     },
     {
+        'id': 'flipping-bird',
+        'title': '振翅飞行',
+        'subtitle': '一键拍翅膀 · 三套角色与场景配套',
+        'accent': '#a4c639',
+        'motive': '白色小鸟（金翅 / 红喙）+ 右侧上下云柱',
+        'note': '鸟身用亮面、金色两格是拍动的翅膀，右侧上下两根白柱中间留出通道 = 要穿过的缺口；黄绿底板与已有九色（橙蓝琥珀紫青红绿玫红灰）都不撞。',
+        'art': [
+            '............',
+            '........KKK.',
+            '........KWW.',
+            '........KWW.',
+            '........KWW.',
+            '..KWWK......',
+            '.KWWWKWR....',
+            '.KWYYWWK....',
+            '.KWWWWK.KKK.',
+            '..KWWK..KWW.',
+            '........KWW.',
+            '........KWW.',
+        ],
+    },
+    {
+        'id': 'brick-breaker',
+        'title': '弹球打砖块',
+        'subtitle': '左右按住移动挡板 · 打光砖块过关',
+        'accent': '#b84ad6',
+        'motive': '上两排砖块 + 金色小球 + 底部长挡板',
+        'note': '两排分格砖块点题，中间金色 2x2 是球、底部整条亮面是挡板；洋红紫底板落在蓝紫(#8b6ce8)与玫红(#ec407a)之间，和橙蓝琥珀紫青红绿玫红黄绿灰都不撞。',
+        'art': [
+            '............',
+            '.WWWW..WWWW.',
+            '.WWWW..WWWW.',
+            '............',
+            '.YYYY..WWWW.',
+            '.YYYY..WWWW.',
+            '............',
+            '.....YY.....',
+            '.....YY.....',
+            '............',
+            '.WWWWWWWWWW.',
+            '............',
+        ],
+    },
+    {
+        'id': 'sokoban',
+        'title': '推箱子',
+        'subtitle': '经典搬运 · 方向键移动，把箱子推上目标点',
+        'accent': '#b5722e',
+        'motive': '木箱 + 下方金色菱形目标点',
+        'note': '大木箱占满上半格（白色高光带 + 一点金色反光），正下方一枚金色菱形读作「目标点」= 把箱子推到这里；深棕底板靠明度/饱和度与亮橙(#ff8c42)、琥珀(#f2a33c)拉开，是全套第一枚暗暖色。',
+        'art': [
+            '............',
+            '............',
+            '..KKKKKKKK..',
+            '..KWWAAAWK..',
+            '..KWAAAAYK..',
+            '..KWAAAAYK..',
+            '..KWWAAAWK..',
+            '..KKKKKKKK..',
+            '.....YY.....',
+            '....Y..Y....',
+            '.....YY.....',
+            '............',
+        ],
+    },
+    {
         'id': 'coming-soon',
         'title': '新游戏待定',
         'subtitle': '开发中 · 敬请期待',
@@ -355,9 +421,13 @@ def grid_to_png_bytes(grid, cmap, scale):
             else:
                 c = cmap[ch]
                 line += bytes((int(c[1:3], 16), int(c[3:5], 16), int(c[5:7], 16), 255))
-        line *= scale                      # 横向最近邻放大
+        # 横向最近邻放大：必须逐个像素重复，不能把整行 bytearray 乘以 scale ——
+        # 后者会把 16px 的图案整体平铺 scale 遍，PNG 变成一排竖条纹（SVG 正常所以一直没暴露）。
+        stretched = bytearray()
+        for x in range(GRID):
+            stretched += line[x * 4:(x + 1) * 4] * scale
         for _ in range(scale):             # 纵向最近邻放大
-            rows.append(b'\x00' + bytes(line))
+            rows.append(b'\x00' + bytes(stretched))
     raw = b''.join(rows)
     png = b'\x89PNG\r\n\x1a\n'
     png += _png_chunk(b'IHDR', struct.pack('>IIBBBBB', w, w, 8, 6, 0, 0, 0))

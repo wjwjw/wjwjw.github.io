@@ -16,6 +16,7 @@
 | 小小达人 · 认知问答 | 看图选答案：认形状 / 认颜色 / 认动物 / 比大小 / 找不同 / 数一数，不识字也能玩 | [h5-games/kids-quiz/index.html](h5-games/kids-quiz/index.html) |
 | 拼图乐园 · 滑动拼图 | 方向键把打乱的画推回原样，3×3 → 4×4，6 个手绘场景轮换 | [h5-games/puzzle-slide/index.html](h5-games/puzzle-slide/index.html) |
 | 振翅飞行 · 三套天地 | 一键拍翅膀躲柱子；飞机 × 天空、乌龟 × 草丛、鲸鱼 × 海洋三套固定配套 | [h5-games/flipping-bird/index.html](h5-games/flipping-bird/index.html) |
+| 推箱子 · 经典搬运 | 18 关全部经离线求解器校验可解；4 套角色×场景可成套切换或自由搭配，含立体/平面与高对比风格 | [h5-games/sokoban/index.html](h5-games/sokoban/index.html) |
 | 弹球打砖块 · 六关挑战 | 左右按住移动挡板把球弹回去，打光整片彩色砖块；星砖会掉星星，掉球只掉一颗心 | [h5-games/brick-breaker/index.html](h5-games/brick-breaker/index.html) |
 | 3D 俄罗斯方块 | 基于 three.js 的 3D 俄罗斯方块，鼠标旋转视角 | [threejs-brick-game/index.html](threejs-brick-game/index.html) |
 | 网页 URL 测速工具 | 一键测速，查看网页资源加载耗时与顺序 | [url-speed-test/index.html](url-speed-test/index.html) |
@@ -36,8 +37,9 @@
   - `puzzle-slide/` — 拼图乐园滑动拼图（3×3→4×4，6 个矢量场景，打乱必定可解）
   - `snake/` — 贪吃蛇（吃苹果长大，方向键转弯）
   - `flipping-bird/` — 振翅飞行（一键拍翅膀，三套固定配套：飞机×天空 / 乌龟×草丛 / 鲸鱼×海洋）
+  - `sokoban/` — 推箱子（经典搬运，4 套主题可配套 / 自由搭配，关卡经离线求解器校验可解）
   - `brick-breaker/` — 弹球打砖块（挡板接球打砖块，六关递进，掉球只掉一颗心）
-  - `assets/icons/` — **统一像素风游戏图标集**（九枚，16×16 网格、统一底板/描边/高光，
+  - `assets/icons/` — **统一像素风游戏图标集**（每游戏一枚，16×16 网格、统一底板/描边/高光，
     每枚一个主题色；SVG + PNG 64/128）。规范见其内 `SPEC.md`，总览页 `preview.html`，
     重新生成 `python build_icons.py`
   - `docs/STANDARD.md` — TV 游戏开发规范（目录结构、输入契约、兼容性约束、图标接入）

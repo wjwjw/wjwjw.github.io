@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>推箱子 · 经典搬运</title>
+<link rel="stylesheet" href="../shared/base.css" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div id="app">
+  <div id="stage">
+    <canvas id="game"></canvas>
+    <canvas id="fx2d"></canvas>
+
+    <!-- 对局 HUD -->
+    <div id="hud" class="hidden">
+      <div class="hud-left">
+        <span id="hudLevel" class="hud-title">第 1 关</span>
+        <span id="hudPar" class="hud-dim"></span>
+      </div>
+      <div class="hud-mid">
+        <span id="hudSteps" class="hud-stat">步数 0</span>
+        <span id="hudPushes" class="hud-stat">推箱 0</span>
+        <span id="hudBest" class="hud-dim">最佳 —</span>
+      </div>
+      <div class="hud-right">
+        <button id="btnUndo" data-tv-focus="">撤销</button>
+        <button id="btnHudRestart" data-tv-focus="">重开</button>
+        <button id="btnHudPause" data-tv-focus="">暂停</button>
+      </div>
+    </div>
+
+    <!-- 开始页：只保留套装一键选择 + 开始（角色/场景/风格收进「自定义装扮」） -->
+    <div id="startScreen" class="overlay">
+      <h1 class="game-title">推箱子</h1>
+      <p class="game-sub">把箱子推上目标点 · 方向键移动，箱子只能推不能拉</p>
+
+      <div class="row-label">主题套装</div>
+      <div class="pick-row" id="packRow"></div>
+
+      <div class="cta-row">
+        <button id="btnStart" class="primary" data-tv-focus="">开始游戏</button>
+        <button id="btnCustom" data-tv-focus="">自定义装扮</button>
+        <button id="btnLevels" data-tv-focus="">选择关卡</button>
+      </div>
+      <p class="hint">方向键 / WASD / 触屏滑动移动 · OK 暂停 · U 撤销 · R 重开</p>
+    </div>
+
+    <!-- 自定义装扮（二级弹层）：角色 / 场景混搭 + 风格配置 -->
+    <div id="customScreen" class="overlay hidden">
+      <h2 class="overlay-title">自定义装扮</h2>
+
+      <div class="row-label">角色（可与任意场景混搭）</div>
+      <div class="pick-row" id="charRow"></div>
+
+      <div class="row-label">场景（可与任意角色混搭）</div>
+      <div class="pick-row" id="sceneRow"></div>
+
+      <div class="style-row">
+        <button id="btnSolid" data-tv-focus="">立体方块</button>
+        <button id="btnContrast" data-tv-focus="">高对比：关</button>
+        <button id="btnMute" data-tv-focus="">音效：开</button>
+        <button id="btnLink" data-tv-focus="">恢复配套</button>
+      </div>
+
+      <div class="cta-row">
+        <button id="btnCustomBack" class="primary" data-tv-focus="">完成</button>
+      </div>
+    </div>
+
+    <!-- 选关页 -->
+    <div id="levelScreen" class="overlay hidden">
+      <h2 class="overlay-title">选择关卡</h2>
+      <div id="levelGrid"></div>
+      <div class="cta-row">
+        <button id="btnLevelBack" data-tv-focus="">返回</button>
+      </div>
+    </div>
+
+    <!-- 暂停页 -->
+    <div id="pauseScreen" class="overlay hidden">
+      <h2 class="overlay-title">已暂停</h2>
+      <div class="cta-row">
+        <button id="btnResume" class="primary" data-tv-focus="">继续</button>
+        <button id="btnRestart" data-tv-focus="">重开本关</button>
+      </div>
+      <div class="cta-row">
+        <button id="btnPauseLevels" data-tv-focus="">选关</button>
+        <button id="btnMutePause" data-tv-focus="">音效：开</button>
+      </div>
+    </div>
+
+    <!-- 过关页 -->
+    <div id="winScreen" class="overlay hidden">
+      <h2 class="overlay-title big" id="winTitle">关卡完成！</h2>
+      <p class="win-stats" id="winStats"></p>
+      <p class="win-best" id="winBest"></p>
+      <div class="cta-row">
+        <button id="btnNext" class="primary" data-tv-focus="">下一关</button>
+        <button id="btnReplay" data-tv-focus="">再玩一次</button>
+      </div>
+      <div class="cta-row">
+        <button id="btnWinBack" data-tv-focus="">返回选关</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="../shared/input.js"></script>
+<script src="../shared/fx.js"></script>
+<!-- TV 启动器兜底：MainActivity.onKeyDown 会 evaluateJavascript("TVLauncher.handleBack()")，
+     standalone 下没有 tv-controls 注入，必须补这个兜底（同 number-runner，见 STANDARD §4）。 -->
+<script>window.TVLauncher=window.TVLauncher||{handleBack:function(){try{window.TVInput&&window.TVInput.trigger('back')}catch(e){}}};</script>
+<script src="../shared/nav.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/themes.js"></script>
+<script src="js/levels.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>

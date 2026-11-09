@@ -6,9 +6,8 @@
 - `bg/` 通用背景图（星空、草地、暗色渐变等）
 - `sfx/` 通用音效（`click.mp3`、`confirm.mp3`、`back.mp3`、`win.mp3`、`lose.mp3`）
 - `icons/` 通用 UI 图标（用 SVG/PNG，**不要依赖 emoji 字体**，见 STANDARD.md §6）
-  - `icons/` 下已有一套**九枚像素风游戏图标**（数字跑酷 / 迷宫闯关 / 火眼金睛 / 记忆翻牌 /
-    小小达人 / 拼图乐园 / 贪吃蛇 / 3D 俄罗斯方块 / 新游戏待定），
-    每枚含 `.svg` + `.png`(64) + `@2x.png`(128)。
+  - `icons/` 下已有一套**按游戏一一对应的像素风图标**，覆盖 `tv-h5-app/js/config.js`
+    中每个已上线游戏与「新游戏待定」占位，每枚含 `.svg` + `.png`(64) + `@2x.png`(128)。
     规格与设计说明见 `icons/SPEC.md`，总览页 `icons/preview.html`，
     重新生成：`cd icons && python build_icons.py`。
 - `fonts/` 如需统一字体
