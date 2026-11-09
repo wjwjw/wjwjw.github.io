@@ -1,0 +1,280 @@
+/*
+ * style.css —— 振翅飞行（flipping-bird）
+ * 兼容目标：MiTV4A / Android 6 / WebView ≈ Chromium 47
+ * 不使用 grid / gap / min() / max() / clamp() / inset / color-mix / CSS 变量（见 docs/STANDARD.md §6）
+ * 三套主题用 #app 上的 class 切换 UI 强调色，不用 var(--x)。
+ */
+
+#app {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #06121f;
+}
+#stage { position: relative; width: 100%; height: 100%; }
+#game { display: block; }
+
+/* ---------- 游戏内 HUD ---------- */
+#hud {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 10px 12px 0;
+  pointer-events: none;
+  z-index: 5;
+}
+#hud.hidden { display: none; }
+.hud-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+}
+.hud-pill {
+  margin: 0 5px 7px;
+  background: rgba(8, 22, 38, 0.86);
+  border: 2px solid #2b4a68;
+  border-radius: 999px;
+  padding: 5px 17px;
+  font-size: 17px;
+  color: #dceaf7;
+  white-space: nowrap;
+}
+.hud-pill b { color: #ffd166; font-weight: 700; }
+#livesText { color: #ff8f8f; letter-spacing: 2px; }
+#comboPill { color: #9fd0ef; }
+
+#toast {
+  width: 340px;
+  margin: 10px auto 0;
+  padding: 9px 0;
+  text-align: center;
+  font-size: 20px;
+  font-weight: 700;
+  border-radius: 12px;
+  background: rgba(8, 22, 38, 0.94);
+  border: 2px solid #2b4a68;
+  color: #dceaf7;
+}
+#toast.hidden { display: none; }
+#toast.good { color: #7ee0b8; border-color: #2f6f5a; }
+#toast.warn { color: #ffb35c; border-color: #7a5320; }
+
+/* ---------- 覆盖层渐入 ----------
+   父覆盖层只动 background-color（tv-controls 用 opacity===0 判可见性，
+   父层动 opacity 会让自动聚焦失效）；位移 + 淡入放在子卡片上。见 STANDARD §6。 */
+@-webkit-keyframes fbBackdropIn {
+  from { background-color: rgba(0, 0, 0, 0); }
+}
+@keyframes fbBackdropIn {
+  from { background-color: rgba(0, 0, 0, 0); }
+}
+@-webkit-keyframes fbCardIn {
+  from { opacity: 0; -webkit-transform: translateY(20px) scale(0.94); }
+  to   { opacity: 1; -webkit-transform: translateY(0) scale(1); }
+}
+@keyframes fbCardIn {
+  from { opacity: 0; transform: translateY(20px) scale(0.94); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.overlay.anim-in {
+  -webkit-animation: fbBackdropIn 0.34s ease-out both;
+  animation: fbBackdropIn 0.34s ease-out both;
+}
+.overlay.anim-in .card {
+  -webkit-animation: fbCardIn 0.44s cubic-bezier(0.22, 0.9, 0.3, 1) both;
+  animation: fbCardIn 0.44s cubic-bezier(0.22, 0.9, 0.3, 1) both;
+}
+/* 标题页留一点透明度，切搭配时能看见背后实时变化的场景 */
+.start-overlay { background: rgba(5, 16, 30, 0.74); }
+
+/* ---------- 覆盖层卡片 ---------- */
+.overlay .card {
+  background: rgba(12, 26, 42, 0.96);
+  border: 2px solid #2b4a68;
+  border-radius: 18px;
+  padding: 20px 30px 24px;
+  width: 94%;
+  max-width: 640px;
+  /* 标题页内容多，矮视口（电视 540 逻辑高）不能把底部说明整块裁掉 */
+  max-height: 94%;
+  overflow-y: auto;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+}
+.title-tag {
+  display: inline-block;
+  font-size: 13px;
+  letter-spacing: 3px;
+  color: #9fd0ef;
+  border: 2px solid #2b4a68;
+  border-radius: 999px;
+  padding: 3px 15px;
+  margin-bottom: 8px;
+}
+.overlay h1 {
+  font-size: 42px;
+  font-weight: 700;
+  letter-spacing: 5px;
+  color: #ffd166;
+  margin: 2px 0 6px;
+}
+.overlay h2 {
+  font-size: 28px;
+  font-weight: 700;
+  color: #ffd166;
+  margin: 4px 0 12px;
+}
+.subtitle { font-size: 16px; color: #a9c2d8; line-height: 1.6; margin: 0 0 12px; }
+.hint { font-size: 14px; color: #7f9bb4; margin: 12px 0 0; }
+.best-line { font-size: 15px; color: #a9c2d8; margin: 8px 0 0; }
+.best-line b { color: #7ee0b8; font-size: 19px; }
+
+/* 预览：当前角色 + 当前场景，切配套立刻看得见 */
+#preview {
+  display: block;
+  width: 100%;
+  max-width: 520px;
+  height: 140px;
+  margin: 0 auto 10px;
+  border: 2px solid #2b4a68;
+  border-radius: 12px;
+  background: #7ec8f2;
+}
+.combo-line { font-size: 15px; color: #a9c2d8; margin: 0 0 10px; }
+.combo-line b { color: #ffd166; font-size: 18px; }
+.link-badge {
+  display: inline-block;
+  font-size: 12px;
+  color: #7ee0b8;
+  border: 1px solid #2f6f5a;
+  border-radius: 999px;
+  padding: 1px 10px;
+  margin-left: 6px;
+}
+.link-badge.free { color: #ffb35c; border-color: #7a5320; }
+.combo-best { font-size: 13px; color: #7ee0b8; margin-left: 8px; }
+
+/* ---------- 选搭配 ---------- */
+.pick-block { margin: 12px 0 6px; }
+.pick-label {
+  font-size: 14px;
+  color: #9fd0ef;
+  text-align: left;
+  margin: 8px 0 6px;
+}
+.pick-label em { font-style: normal; font-size: 12.5px; color: #7f9bb4; margin-left: 8px; }
+.pick-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+}
+.pick-row > * { margin: 5px; }
+button.pick {
+  min-width: 132px;
+  min-height: 56px;
+  padding: 8px 12px;
+  font-size: 18px;
+  font-weight: 700;
+  background: #162b42;
+  border-color: #2b4a68;
+  color: #dceaf7;
+}
+button.pick small {
+  display: block;
+  font-size: 12px;
+  font-weight: 400;
+  color: #8aa8c0;
+  margin-top: 2px;
+}
+button.pick.sel { background: #245b86; border-color: #ffd166; color: #fff6d8; }
+button.pick.sel small { color: #ffe9a8; }
+
+.btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+}
+.btn-row > * { margin: 6px; }
+.big-btn {
+  background: #2f8fd0;
+  border-color: #1b5f94;
+  color: #f6fcff;
+  font-size: 22px;
+  font-weight: 700;
+  margin: 4px 0 10px;
+}
+.big-btn:hover, .big-btn:focus, .big-btn.sel { background: #47a8e8; }
+.text-btn { min-width: 128px; padding: 10px 18px; font-size: 17px; }
+
+/* 三套主题的 UI 强调色（与场景配色对应） */
+.theme-meadow .big-btn { background: #4f9e3a; border-color: #356b27; }
+.theme-meadow .big-btn:hover, .theme-meadow .big-btn:focus, .theme-meadow .big-btn.sel { background: #66bd4e; }
+.theme-meadow button.pick.sel { background: #3d7a2c; }
+.theme-ocean .big-btn { background: #1c7fa8; border-color: #0f5474; }
+.theme-ocean .big-btn:hover, .theme-ocean .big-btn:focus, .theme-ocean .big-btn.sel { background: #269ac6; }
+.theme-ocean button.pick.sel { background: #145d7f; }
+
+.score-box {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  margin: 6px 0 16px;
+}
+.score-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 132px;
+  margin: 6px 10px;
+  padding: 10px 22px;
+  background: #162b42;
+  border: 2px solid #2b4a68;
+  border-radius: 14px;
+}
+.score-label { font-size: 13px; color: #9fb8cc; margin-bottom: 2px; }
+.score-num { font-size: 30px; font-weight: 700; color: #ffd166; }
+
+/* 矮视口（电视 / 笔记本）紧凑排版：把标题页完整塞进一屏 */
+@media (max-height: 720px) {
+  /* base.css 的 .overlay padding:5% 是按「宽度」算的 —— 960 宽时上下各 48px，
+     在 540 高的电视上会白白吃掉近 100px。矮屏改固定小边距。 */
+  .overlay { padding: 10px 3%; }
+  .overlay .card { padding: 10px 20px 12px; }
+  .title-tag { display: none; }
+  .start-overlay .subtitle { display: none; }
+  .best-line { display: none; }
+  .overlay h1 { font-size: 28px; letter-spacing: 3px; margin: 0 0 4px; }
+  .subtitle { font-size: 13px; margin: 0 0 8px; }
+  #preview { height: 76px; }
+  .combo-line { font-size: 13px; margin: 0 0 6px; }
+  .combo-best { font-size: 12px; }
+  .combo-line b { font-size: 15px; }
+  .big-btn { font-size: 18px; min-height: 48px; padding: 6px 18px; margin: 2px 0 6px; }
+  .pick-block { margin: 4px 0 2px; }
+  .pick-label { font-size: 12px; margin: 3px 0; }
+  .pick-label em { font-size: 11px; }
+  .pick-row > * { margin: 3px; }
+  button.pick { min-width: 112px; min-height: 46px; padding: 5px 10px; font-size: 15px; }
+  button.pick small { font-size: 11px; }
+  .btn-row > * { margin: 3px; }
+  .text-btn { min-width: 110px; min-height: 44px; padding: 6px 14px; font-size: 14px; }
+  .best-line { font-size: 12px; margin: 4px 0 0; }
+  .hint { font-size: 12px; margin: 6px 0 0; }
+}
+
+@media (max-width: 560px) {
+  .overlay .card { padding: 16px 14px 20px; }
+  .overlay h1 { font-size: 30px; letter-spacing: 3px; }
+  .overlay h2 { font-size: 22px; }
+  #preview { height: 108px; }
+  .hud-pill { font-size: 14px; padding: 4px 12px; }
+  #toast { width: 250px; font-size: 17px; }
+  button.pick { min-width: 100px; font-size: 16px; }
+  .score-item { min-width: 112px; padding: 8px 14px; }
+  .score-num { font-size: 24px; }
+}

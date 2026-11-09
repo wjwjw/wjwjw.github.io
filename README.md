@@ -15,6 +15,7 @@
 | 记忆翻牌 · 配对 | 预览 → 扣牌 → 方向键移动高亮框，OK 翻两张相同的图案配成一对 | [h5-games/memory-match/index.html](h5-games/memory-match/index.html) |
 | 小小达人 · 认知问答 | 看图选答案：认形状 / 认颜色 / 认动物 / 比大小 / 找不同 / 数一数，不识字也能玩 | [h5-games/kids-quiz/index.html](h5-games/kids-quiz/index.html) |
 | 拼图乐园 · 滑动拼图 | 方向键把打乱的画推回原样，3×3 → 4×4，6 个手绘场景轮换 | [h5-games/puzzle-slide/index.html](h5-games/puzzle-slide/index.html) |
+| 振翅飞行 · 三套天地 | 一键拍翅膀躲柱子；飞机 × 天空、乌龟 × 草丛、鲸鱼 × 海洋三套固定配套 | [h5-games/flipping-bird/index.html](h5-games/flipping-bird/index.html) |
 | 3D 俄罗斯方块 | 基于 three.js 的 3D 俄罗斯方块，鼠标旋转视角 | [threejs-brick-game/index.html](threejs-brick-game/index.html) |
 | 网页 URL 测速工具 | 一键测速，查看网页资源加载耗时与顺序 | [url-speed-test/index.html](url-speed-test/index.html) |
 
@@ -33,6 +34,7 @@
   - `kids-quiz/` — 小小达人认知问答（7 种题型全图形化，低龄儿童不识字也能玩）
   - `puzzle-slide/` — 拼图乐园滑动拼图（3×3→4×4，6 个矢量场景，打乱必定可解）
   - `snake/` — 贪吃蛇（吃苹果长大，方向键转弯）
+  - `flipping-bird/` — 振翅飞行（一键拍翅膀，三套固定配套：飞机×天空 / 乌龟×草丛 / 鲸鱼×海洋）
   - `assets/icons/` — **统一像素风游戏图标集**（九枚，16×16 网格、统一底板/描边/高光，
     每枚一个主题色；SVG + PNG 64/128）。规范见其内 `SPEC.md`，总览页 `preview.html`，
     重新生成 `python build_icons.py`

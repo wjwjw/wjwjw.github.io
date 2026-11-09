@@ -148,6 +148,18 @@ window.APP_CONFIG = {
       tvControls: true
     },
 
+    {
+      id: "flipping-bird",
+      title: "振翅飞行",
+      subtitle: "一键拍翅膀 · 飞机×天空 / 乌龟×草丛 / 鲸鱼×海洋 三套固定配套",
+      icon: "../h5-games/assets/icons/flipping-bird.svg",
+      folder: "flipping-bird",
+      entry: "index.html",
+      completed: true,
+      color: "#a4c639",
+      tvControls: true
+    },
+
     /* ↓↓↓ 后续新游戏照抄这一段，completed 先设 false 即可占位 ↓↓↓ */
     {
       id: "coming-soon",

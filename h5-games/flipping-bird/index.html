@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>振翅飞行 · Flipping Bird</title>
+  <!-- 内联 favicon：避免老 WebView 自动请求 /favicon.ico 产生 404 -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23a4c639'/%3E%3Ccircle cx='14' cy='16' r='7' fill='%23fffcf2'/%3E%3Ccircle cx='19' cy='16' r='2' fill='%23e5484d'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="../shared/base.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div id="app" class="theme-sky">
+  <div id="stage">
+    <canvas id="game"></canvas>
+
+    <!-- 游戏内 HUD（DOM 覆盖层，由 game.js 更新） -->
+    <div id="hud" class="hidden">
+      <div class="hud-top">
+        <div class="hud-pill">分数 <b id="scoreText">0</b></div>
+        <div class="hud-pill">里程 <b id="levelText">1</b></div>
+        <div class="hud-pill">最高 <b id="bestText">0</b></div>
+        <div class="hud-pill">生命 <b id="livesText">♥♥♥</b></div>
+        <div class="hud-pill" id="comboPill">小飞机 × 天空</div>
+      </div>
+      <div id="toast" class="hidden"></div>
+    </div>
+  </div>
+
+  <!-- 标题 / 选搭配：预览画布会实时画出当前角色与场景 -->
+  <div id="startScreen" class="overlay start-overlay">
+    <div class="card">
+      <div class="title-tag">FLIPPING BIRD</div>
+      <h1>振翅飞行</h1>
+      <p class="subtitle">一键起飞 · 三套固定搭配，选角色即整套切换</p>
+
+      <canvas id="preview" width="520" height="140"></canvas>
+      <p class="combo-line">当前搭配：<b id="comboText">小飞机 × 天空</b> <span class="link-badge">固定配套</span> <span id="comboBest" class="combo-best">最高 0</span></p>
+
+      <!-- DOM 里第一个按钮：自动聚焦落在它上面，遥控器按一下 OK 就起飞 -->
+      <button id="btnStart" class="big-btn tv-focus" data-tv-focus autofocus>开始飞行</button>
+
+      <div class="pick-block">
+        <p class="pick-label">选一套搭配 <em>方向键移动光标，OK 选定</em></p>
+        <div class="pick-row" id="comboRow">
+          <button class="pick tv-focus sel" data-tv-focus data-combo="0">小飞机 × 天空<small>云柱 · 螺旋桨</small></button>
+          <button class="pick tv-focus" data-tv-focus data-combo="1">小乌龟 × 草丛<small>灌木丛 · 龟壳</small></button>
+          <button class="pick tv-focus" data-tv-focus data-combo="2">小鲸鱼 × 海洋<small>珊瑚柱 · 尾鳍</small></button>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button id="btnMute" class="text-btn tv-focus" data-tv-focus>声音</button>
+      </div>
+      <p class="best-line">该搭配最高：<b id="startBest">0</b> 分</p>
+      <p class="hint">OK / 空格 / ↑ 拍翅膀 · 返回键暂停 · 鼠标 / 触屏点击也能拍翅膀</p>
+    </div>
+  </div>
+
+  <!-- 暂停 -->
+  <div id="pauseScreen" class="overlay hidden">
+    <div class="card">
+      <h2>暂停中</h2>
+      <p id="pauseStat" class="subtitle"></p>
+      <div class="btn-row">
+        <button id="btnResume" class="big-btn tv-focus" data-tv-focus>继续飞行</button>
+        <button id="btnRestart" class="text-btn tv-focus" data-tv-focus>重新开始</button>
+        <button id="btnPauseMute" class="text-btn tv-focus" data-tv-focus>声音</button>
+        <button id="btnQuit" class="text-btn tv-focus" data-tv-focus>换套装</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 结束 -->
+  <div id="overScreen" class="overlay hidden">
+    <div class="card">
+      <div class="title-tag">FLIGHT OVER</div>
+      <h2 id="overTitle">这趟飞完啦</h2>
+      <div class="score-box">
+        <div class="score-item"><span class="score-label">本局分数</span><span id="overScore" class="score-num">0</span></div>
+        <div class="score-item"><span class="score-label">飞过柱子</span><span id="overPipes" class="score-num">0</span></div>
+        <div class="score-item"><span class="score-label">到达里程</span><span id="overLevel" class="score-num">1</span></div>
+        <div class="score-item"><span class="score-label">该搭配最高</span><span id="overBest" class="score-num">0</span></div>
+      </div>
+      <p id="overTip" class="subtitle"></p>
+      <div class="btn-row">
+        <button id="btnReplay" class="big-btn tv-focus" data-tv-focus>再飞一次</button>
+        <button id="btnOverQuit" class="text-btn tv-focus" data-tv-focus>换套装</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 经典脚本（兼容 Android 6 WebView，不用 ES module） -->
+<script src="../shared/input.js"></script>
+<!-- 启动器把遥控 BACK 转发到 TVInput 的 back 事件；没有这个全局对象时 BACK 到不了 JS。 -->
+<script>window.TVLauncher=window.TVLauncher||{handleBack:function(){try{window.TVInput&&window.TVInput.trigger('back')}catch(e){}}};</script>
+<script src="../shared/nav.js"></script>
+<script src="../shared/fx.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/themes.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
