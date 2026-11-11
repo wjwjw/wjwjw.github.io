@@ -10,7 +10,8 @@
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #080d1a;
+  background: -webkit-linear-gradient(160deg, #151033, #080d1a 65%);
+  background: linear-gradient(160deg, #151033, #080d1a 65%);
 }
 
 /* ---------- 游戏内 HUD ---------- */
@@ -33,13 +34,15 @@
 }
 .hud-pill {
   margin: 0 5px 7px;
-  background: rgba(14, 22, 44, 0.92);
-  border: 2px solid #3a3a68;
+  background: -webkit-linear-gradient(180deg, rgba(45, 38, 82, 0.94), rgba(14, 22, 44, 0.94));
+  background: linear-gradient(180deg, rgba(45, 38, 82, 0.94), rgba(14, 22, 44, 0.94));
+  border: 2px solid #554a8e;
   border-radius: 999px;
   padding: 5px 17px;
   font-size: 17px;
   color: #d8dcff;
   white-space: nowrap;
+  box-shadow: inset 0 1px 0 rgba(215, 190, 255, 0.26), 0 4px 14px rgba(0, 0, 0, 0.38);
 }
 .hud-pill b { color: #ffd166; font-weight: 700; }
 #livesText { color: #ff9ab6; letter-spacing: 2px; }
@@ -52,9 +55,11 @@
   font-size: 20px;
   font-weight: 700;
   border-radius: 12px;
-  background: rgba(14, 22, 44, 0.94);
-  border: 2px solid #3a3a68;
+  background: -webkit-linear-gradient(180deg, rgba(45, 38, 82, 0.96), rgba(14, 22, 44, 0.96));
+  background: linear-gradient(180deg, rgba(45, 38, 82, 0.96), rgba(14, 22, 44, 0.96));
+  border: 2px solid #554a8e;
   color: #d8dcff;
+  box-shadow: inset 0 1px 0 rgba(215, 190, 255, 0.24), 0 6px 18px rgba(0, 0, 0, 0.42);
 }
 #toast.hidden { display: none; }
 #toast.good { color: #9ae8c0; border-color: #2f6f5a; }
@@ -88,23 +93,28 @@
 
 /* ---------- 覆盖层卡片 ---------- */
 .overlay .card {
-  background: #141b33;
-  border: 2px solid #3a3a68;
+  background: -webkit-linear-gradient(160deg, #27204c, #121a34 70%);
+  background: linear-gradient(160deg, #27204c, #121a34 70%);
+  border: 2px solid #554a8e;
   border-radius: 18px;
   padding: 26px 34px 30px;
   width: 92%;
   max-width: 660px;
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+  box-shadow: inset 0 1px 0 rgba(215, 190, 255, 0.24),
+              0 24px 60px rgba(0, 0, 0, 0.62),
+              0 0 44px rgba(150, 90, 220, 0.18);
 }
 .title-tag {
   display: inline-block;
   font-size: 13px;
   letter-spacing: 3px;
-  color: #d99aff;
-  border: 2px solid #4b3a75;
+  color: #ecc4ff;
+  background: rgba(70, 44, 110, 0.55);
+  border: 2px solid #634c9c;
   border-radius: 999px;
   padding: 3px 15px;
   margin-bottom: 10px;
+  box-shadow: inset 0 1px 0 rgba(230, 200, 255, 0.22);
 }
 .overlay h1 {
   font-size: 46px;
@@ -112,12 +122,14 @@
   letter-spacing: 6px;
   color: #dfaaff;
   margin: 6px 0 8px;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.35), 0 0 26px rgba(190, 120, 255, 0.45);
 }
 .overlay h2 {
   font-size: 28px;
   font-weight: 700;
   color: #dfaaff;
   margin: 4px 0 12px;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.35), 0 0 18px rgba(190, 120, 255, 0.36);
 }
 .subtitle {
   font-size: 17px;
@@ -144,18 +156,30 @@
 .hint { font-size: 14px; color: #7e88b4; margin: 16px 0 0; }
 
 .big-btn {
-  background: #8b3fb0;
-  border-color: #5f2780;
+  background: -webkit-linear-gradient(180deg, #b25ad9, #8b3fb0 55%, #6c2c8e);
+  background: linear-gradient(180deg, #b25ad9, #8b3fb0 55%, #6c2c8e);
+  border: 2px solid #5f2780;
   color: #fdf6ff;
   font-size: 22px;
   font-weight: 700;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.30);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.38),
+              0 6px 16px rgba(0, 0, 0, 0.40),
+              0 0 22px rgba(170, 90, 220, 0.32);
 }
-.big-btn:hover, .big-btn:focus, .big-btn.sel { background: #a553cb; }
+.big-btn:hover, .big-btn:focus, .big-btn.sel {
+  background: -webkit-linear-gradient(180deg, #c46ce8, #a553cb 55%, #7d3aa2);
+  background: linear-gradient(180deg, #c46ce8, #a553cb 55%, #7d3aa2);
+}
 
 .text-btn {
   min-width: 130px;
   padding: 10px 18px;
   font-size: 17px;
+  background: -webkit-linear-gradient(180deg, #2c2652, #1a1f3c);
+  background: linear-gradient(180deg, #2c2652, #1a1f3c);
+  border-color: #3a3a68;
+  box-shadow: inset 0 1px 0 rgba(215, 190, 255, 0.18), 0 4px 12px rgba(0, 0, 0, 0.32);
 }
 
 .btn-row {
@@ -180,9 +204,11 @@
   min-width: 132px;
   margin: 6px 10px;
   padding: 10px 22px;
-  background: #1b2444;
+  background: -webkit-linear-gradient(180deg, #2c2652, #171e3b);
+  background: linear-gradient(180deg, #2c2652, #171e3b);
   border: 2px solid #3a3a68;
   border-radius: 14px;
+  box-shadow: inset 0 1px 0 rgba(215, 190, 255, 0.20), 0 5px 14px rgba(0, 0, 0, 0.32);
 }
 .score-label { font-size: 13px; color: #9aa4cf; margin-bottom: 2px; }
 .score-num { font-size: 30px; font-weight: 700; color: #ffd166; }

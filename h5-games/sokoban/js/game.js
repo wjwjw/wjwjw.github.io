@@ -206,6 +206,19 @@
 
     fx.applyShake(ctx);
 
+    // 棋盘底板：投影 + 半透明衬底 + 细亮边，让棋盘从背景里「浮」起来
+    var pad = Math.max(6, Math.round(tile * 0.16));
+    var bwx = tile * grid.w, bwh = tile * grid.h;
+    ctx.fillStyle = 'rgba(0,0,0,0.22)';
+    ctx.fillRect(bx0 - pad + 5, by0 - pad + 7, bwx + pad * 2, bwh + pad * 2);
+    ctx.fillStyle = 'rgba(8,12,20,0.20)';
+    ctx.fillRect(bx0 - pad, by0 - pad, bwx + pad * 2, bwh + pad * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.16)';
+    ctx.fillRect(bx0 - pad, by0 - pad, bwx + pad * 2, 2);
+    ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(bx0 - pad + 1, by0 - pad + 1, bwx + pad * 2 - 2, bwh + pad * 2 - 2);
+
     var x, y, i, px, py;
     // 1) 地板 + 目标点（平铺，无遮挡关系）
     for (y = 0; y < grid.h; y++) {

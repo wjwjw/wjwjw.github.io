@@ -50,6 +50,8 @@
   var fx = FX.create();
   var vigCache = null;
   var fieldCache = null;
+  /* 柔光贴图：只在 resize 时预渲染一次，渲染循环里只 drawImage（STANDARD §10.3） */
+  var ballGlow = null, paddleGlow = null, starGlow = null;
 
   var best = 0, score = 0, level = 1, lives = LIVES;
   var combo = 0, bricksLeft = 0;
@@ -126,6 +128,9 @@
 
     prerenderField();
     prerenderVignette();
+    ballGlow = FX.glowSprite('#ffd9a0', 40, 0.55);
+    paddleGlow = FX.glowSprite('#ffd166', 56, 0.34);
+    starGlow = FX.glowSprite('#ffe9a8', 28, 0.60);
     spawnMotes();
   }
 
@@ -174,30 +179,81 @@
     var g = fieldCache.getContext('2d');
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
 
+    /* 场地底色：上暖紫 → 下深蓝，静态预渲染，每帧只 drawImage */
     rr(g, 1, 1, w - 2, h - 2, 16);
-    g.fillStyle = '#111c33';
+    var bg = g.createLinearGradient(0, 0, 0, h);
+    bg.addColorStop(0, '#1d2750');
+    bg.addColorStop(0.45, '#121d3a');
+    bg.addColorStop(1, '#080e20');
+    g.fillStyle = bg;
     g.fill();
     g.lineWidth = 3;
-    g.strokeStyle = '#3a4e7a';
+    g.strokeStyle = '#43598c';
+    g.stroke();
+    /* 内框一圈亮边，让场地像一块嵌进去的面板 */
+    g.lineWidth = 2;
+    g.strokeStyle = 'rgba(150, 190, 255, 0.20)';
+    rr(g, 5, 5, w - 10, h - 10, 13);
     g.stroke();
 
-    g.fillStyle = 'rgba(255, 233, 168, 0.035)';
+    /* 砖区背后的紫色柔光 + 顶部暖光带：把上半场的注意力聚到砖阵 */
+    var glow = g.createRadialGradient(w / 2, h * 0.10, 8, w / 2, h * 0.10, w * 0.62);
+    glow.addColorStop(0, 'rgba(150, 115, 235, 0.26)');
+    glow.addColorStop(0.55, 'rgba(110, 100, 210, 0.10)');
+    glow.addColorStop(1, 'rgba(110, 100, 210, 0)');
+    g.fillStyle = glow;
+    g.fillRect(6, 6, w - 12, h - 12);
+    g.fillStyle = 'rgba(255, 233, 168, 0.045)';
     g.fillRect(6, 6, w - 12, layout.brickTop - layout.y0 + layout.bh * layout.rows + 14);
-    g.fillStyle = 'rgba(0, 0, 0, 0.18)';
-    g.fillRect(6, layout.paddleY - layout.y0 - 26, w - 12, h - (layout.paddleY - layout.y0) + 20);
+
+    /* 下半场「台面」：渐变压暗 + 地平线亮线 + 透视网格，给空场一点纵深 */
+    var floorY = layout.paddleY - layout.y0 - 26;
+    var floor = g.createLinearGradient(0, floorY, 0, h);
+    floor.addColorStop(0, 'rgba(86, 112, 180, 0.10)');
+    floor.addColorStop(1, 'rgba(4, 8, 20, 0.52)');
+    g.fillStyle = floor;
+    g.fillRect(6, floorY, w - 12, h - floorY - 6);
+    g.fillStyle = 'rgba(150, 190, 255, 0.20)';
+    g.fillRect(6, floorY, w - 12, 2);
+    g.strokeStyle = 'rgba(125, 155, 230, 0.075)';
+    g.lineWidth = 1;
+    var i, vx;
+    for (i = 0; i <= 10; i++) {
+      vx = 6 + (w - 12) * i / 10;
+      g.beginPath();
+      g.moveTo(w / 2, floorY);
+      g.lineTo(vx, h - 6);
+      g.stroke();
+    }
+    for (i = 1; i <= 5; i++) {
+      var gy = floorY + (h - floorY - 8) * (i / 5) * (i / 5);
+      g.beginPath();
+      g.moveTo(6, gy);
+      g.lineTo(w - 6, gy);
+      g.stroke();
+    }
 
     /* LCG 固定种子：resize 重绘时星尘不会整体跳一遍 */
     var rnd = L.lcg(9137);
-    for (var i = 0; i < 70; i++) {
+    for (i = 0; i < 88; i++) {
       var px = 8 + rnd() * (w - 16);
       var py = 8 + rnd() * (h - 16);
       var s = 1 + rnd() * 1.7;
-      g.fillStyle = rnd() > 0.72 ? 'rgba(255,209,102,0.22)' : 'rgba(190,215,255,0.13)';
+      if (rnd() > 0.90) {
+        g.beginPath();
+        g.arc(px, py, s * 2.6, 0, Math.PI * 2);
+        g.fillStyle = 'rgba(255, 225, 160, 0.10)';
+        g.fill();
+      }
+      g.fillStyle = rnd() > 0.72 ? 'rgba(255,209,102,0.24)' : 'rgba(190,215,255,0.16)';
       g.fillRect(px, py, s, s);
     }
 
     /* 左右反弹墙内侧亮边，给「球会弹回来」一个视觉提示 */
-    g.fillStyle = 'rgba(126, 176, 255, 0.16)';
+    g.fillStyle = 'rgba(126, 176, 255, 0.06)';
+    g.fillRect(7, 10, 14, h - 20);
+    g.fillRect(w - 21, 10, 14, h - 20);
+    g.fillStyle = 'rgba(126, 176, 255, 0.30)';
     g.fillRect(3, 10, 3, h - 20);
     g.fillRect(w - 6, 10, 3, h - 20);
   }
@@ -506,17 +562,30 @@
       var b = bricks[i];
       if (!b.alive) continue;
       var r = brickRect(b);
+      /* 投影 → 主体 → 三层受光 → 细描边：纯色叠出糖果砖的厚度 */
+      rr(ctx, r.x + 2, r.y + 4, r.w, r.h, 5);
+      ctx.fillStyle = 'rgba(0,0,0,0.38)';
+      ctx.fill();
       rr(ctx, r.x, r.y, r.w, r.h, 5);
       ctx.fillStyle = b.color;
       ctx.fill();
-      ctx.fillStyle = 'rgba(255,255,255,0.30)';
-      ctx.fillRect(r.x + 3, r.y + 3, r.w - 6, 3);
-      ctx.fillStyle = 'rgba(0,0,0,0.22)';
+      ctx.fillStyle = 'rgba(255,255,255,0.34)';
+      ctx.fillRect(r.x + 4, r.y + 3, r.w - 8, Math.max(2, r.h * 0.13));
+      ctx.fillStyle = 'rgba(255,255,255,0.13)';
+      ctx.fillRect(r.x + 3, r.y + 3 + Math.max(2, r.h * 0.13), r.w - 6, 2);
+      ctx.fillRect(r.x + 2, r.y + 6, 3, r.h - 12);
+      ctx.fillStyle = 'rgba(0,0,0,0.26)';
       ctx.fillRect(r.x + 3, r.y + r.h - 5, r.w - 6, 3);
+      rr(ctx, r.x + 0.8, r.y + 0.8, r.w - 1.6, r.h - 1.6, 5);
+      ctx.lineWidth = 1.4;
+      ctx.strokeStyle = 'rgba(255,255,255,0.20)';
+      ctx.stroke();
       if (b.hp > 1) {
         ctx.lineWidth = 2;
         ctx.strokeStyle = 'rgba(255,255,255,0.85)';
         ctx.stroke();
+        ctx.fillStyle = 'rgba(255,255,255,0.90)';
+        ctx.fillRect(r.x + 5, r.y + r.h - 7, 7, 3);
       } else if (b.hp < b.maxHp) {
         ctx.strokeStyle = 'rgba(20,20,40,0.45)';
         ctx.lineWidth = 1.5;
@@ -526,9 +595,13 @@
         ctx.stroke();
       }
       if (b.star) {
-        FX.pathStar(ctx, r.x + r.w / 2, r.y + r.h / 2, Math.min(9, r.h * 0.36), Math.min(4, r.h * 0.16), 0);
-        ctx.fillStyle = '#fff3b0';
+        if (starGlow) ctx.drawImage(starGlow, r.x + r.w / 2 - 24, r.y + r.h / 2 - 24, 48, 48);
+        FX.pathStar(ctx, r.x + r.w / 2, r.y + r.h / 2, Math.min(10, r.h * 0.40), Math.min(4, r.h * 0.16), 0);
+        ctx.fillStyle = '#fff8cc';
         ctx.fill();
+        ctx.lineWidth = 1.4;
+        ctx.strokeStyle = 'rgba(255,209,102,0.90)';
+        ctx.stroke();
       }
     }
   }
@@ -537,21 +610,51 @@
     for (var i = 0; i < stars.length; i++) {
       var s = stars[i];
       var rad = 10 + Math.sin(now / 140 + i) * 1.2;
+      if (starGlow) ctx.drawImage(starGlow, s.x - 30, s.y - 30, 60, 60);
+      /* 四角星芒 */
+      ctx.strokeStyle = 'rgba(255, 240, 180, 0.62)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(s.x - rad * 1.5, s.y);
+      ctx.lineTo(s.x + rad * 1.5, s.y);
+      ctx.moveTo(s.x, s.y - rad * 1.5);
+      ctx.lineTo(s.x, s.y + rad * 1.5);
+      ctx.stroke();
       FX.pathStar(ctx, s.x, s.y, rad, rad * 0.45, s.age * 2.2);
-      ctx.fillStyle = '#ffd166';
+      ctx.fillStyle = '#ffe07a';
       ctx.fill();
     }
   }
 
   function drawPaddle() {
     var x = paddle.x - paddle.w / 2, y = layout.paddleY;
+    /* 地面投影 + 柔光 */
+    rr(ctx, x + 3, y + 6, paddle.w, paddle.h, paddle.h / 2);
+    ctx.fillStyle = 'rgba(0,0,0,0.38)';
+    ctx.fill();
+    if (paddleGlow) {
+      ctx.drawImage(paddleGlow, paddle.x - paddle.w * 0.62, y - paddle.h * 1.7,
+                    paddle.w * 1.24, paddle.h * 4.4);
+    }
+    /* 底沿暗色 → 主体亮黄 → 顶部高光 */
     rr(ctx, x, y, paddle.w, paddle.h, paddle.h / 2);
+    ctx.fillStyle = '#b8861f';
+    ctx.fill();
+    rr(ctx, x, y, paddle.w, paddle.h - 4, (paddle.h - 4) / 2);
     ctx.fillStyle = '#ffd166';
     ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.55)';
-    ctx.fillRect(x + 8, y + 3, paddle.w - 16, 3);
-    ctx.fillStyle = '#e8c22e';
-    rr(ctx, paddle.x - 16, y + 4, 32, paddle.h - 8, 3);
+    ctx.fillStyle = 'rgba(255,255,255,0.72)';
+    ctx.fillRect(x + 9, y + 3, paddle.w - 18, 3);
+    /* 中央握把 + 两端亮头 */
+    rr(ctx, paddle.x - 16, y + 3, 32, paddle.h - 7, 3);
+    ctx.fillStyle = '#ffe9a8';
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.60)';
+    ctx.fillRect(paddle.x - 12, y + 4, 24, 2);
+    ctx.fillStyle = '#fff3c4';
+    rr(ctx, x + 2, y + 3, 7, paddle.h - 7, 3);
+    ctx.fill();
+    rr(ctx, x + paddle.w - 9, y + 3, 7, paddle.h - 7, 3);
     ctx.fill();
   }
 
@@ -562,7 +665,12 @@
       ctx.globalAlpha = 0.05 + k * 0.16;
       ctx.beginPath();
       ctx.arc(p.x, p.y, ball.r * (0.35 + k * 0.55), 0, Math.PI * 2);
-      ctx.fillStyle = '#ffe9a8';
+      ctx.fillStyle = '#ffd8a0';
+      ctx.fill();
+      ctx.globalAlpha = 0.10 + k * 0.30;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, ball.r * (0.12 + k * 0.22), 0, Math.PI * 2);
+      ctx.fillStyle = '#fff6d8';
       ctx.fill();
     }
     ctx.globalAlpha = 1;
@@ -570,17 +678,27 @@
 
   function drawBall(now) {
     var pulse = 1 + Math.sin(now / 180) * 0.04;
-    ctx.beginPath();
-    ctx.arc(ball.x, ball.y, ball.r * 2.4 * pulse, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(255, 226, 150, 0.10)';
-    ctx.fill();
+    var gr = ball.r * 4.6 * pulse;
+    if (ballGlow) {
+      ctx.globalAlpha = 0.88;
+      ctx.drawImage(ballGlow, ball.x - gr, ball.y - gr, gr * 2, gr * 2);
+      ctx.globalAlpha = 1;
+    }
+    /* 暖色底沿 + 白核 + 高光点：小球不再是平面圆点 */
     ctx.beginPath();
     ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
-    ctx.fillStyle = '#fffdf2';
+    ctx.fillStyle = '#e8c96a';
     ctx.fill();
     ctx.beginPath();
-    ctx.arc(ball.x - ball.r * 0.28, ball.y - ball.r * 0.30, ball.r * 0.36, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(255,255,255,0.95)';
+    ctx.arc(ball.x, ball.y, ball.r - 1.6, 0, Math.PI * 2);
+    ctx.fillStyle = '#fffdf2';
+    ctx.fill();
+    ctx.lineWidth = 1.2;
+    ctx.strokeStyle = 'rgba(255,220,150,0.85)';
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(ball.x - ball.r * 0.30, ball.y - ball.r * 0.32, ball.r * 0.34, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.98)';
     ctx.fill();
   }
 
@@ -600,10 +718,15 @@
       var text = idx < 3 ? String(3 - idx) : '开始！';
       ctx.textAlign = 'center';
       ctx.font = '700 92px sans-serif';
-      ctx.fillStyle = 'rgba(255, 209, 102, 0.92)';
+      ctx.lineWidth = 8;
+      ctx.strokeStyle = 'rgba(16, 12, 36, 0.72)';
+      ctx.strokeText(text, cx, cy);
+      ctx.fillStyle = 'rgba(255, 209, 102, 0.96)';
       ctx.fillText(text, cx, cy);
       ctx.font = '500 20px sans-serif';
-      ctx.fillStyle = 'rgba(230, 240, 255, 0.85)';
+      ctx.lineWidth = 5;
+      ctx.strokeText('左右移动挡板 · 按 OK 立即发球', cx, cy + 44);
+      ctx.fillStyle = 'rgba(230, 240, 255, 0.88)';
       ctx.fillText('左右移动挡板 · 按 OK 立即发球', cx, cy + 44);
     } else {
       ctx.textAlign = 'center';

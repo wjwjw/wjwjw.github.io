@@ -122,6 +122,19 @@
     if (stroke) { g.lineWidth = lw || 2; g.strokeStyle = stroke; g.stroke(); }
   }
 
+  /* 多边形（灯锥 / 光带 / 远景剪影）；只在离屏预渲染里用 */
+  function poly(g, pts, fill, stroke, lw) {
+    var i;
+    g.beginPath();
+    for (i = 0; i < pts.length; i++) {
+      if (i === 0) g.moveTo(pts[i][0], pts[i][1]);
+      else g.lineTo(pts[i][0], pts[i][1]);
+    }
+    g.closePath();
+    if (fill) { g.fillStyle = fill; g.fill(); }
+    if (stroke) { g.lineWidth = lw || 2; g.strokeStyle = stroke; g.stroke(); }
+  }
+
   // ---------- 静态背景（预渲染，固定种子，resize 重绘不会「跳」） ----------
   function makeCanvas(w, h, dpr) {
     var c = document.createElement('canvas');
@@ -180,58 +193,147 @@
     g.fillRect(0, 0, w, h);
 
     if (sceneId === 'warehouse') {
-      // 暗仓库：两盏吊灯晕光 + 远处货架剪影
-      var rnd = lcg(7);
+      // 墙面木板横缝：让纯色背景先有材质
+      var rnd = lcg(7), bx, by, bw2, lx, ly, lg;
+      g.strokeStyle = 'rgba(0,0,0,0.14)';
+      g.lineWidth = 2;
+      for (i = 0; i < 9; i++) {
+        g.beginPath();
+        g.moveTo(0, h * (0.06 + i * 0.09));
+        g.lineTo(w, h * (0.06 + i * 0.09));
+        g.stroke();
+      }
+      // 两盏吊灯：柔光 + 光锥 + 灯线灯罩
       for (i = 0; i < 2; i++) {
-        var lx = w * (0.3 + i * 0.4);
-        var ly = h * 0.16;
-        var lg = g.createRadialGradient(lx, ly, 4, lx, ly, Math.max(w, h) * 0.28);
-        lg.addColorStop(0, 'rgba(255,214,140,0.20)');
+        lx = w * (0.3 + i * 0.4);
+        ly = h * 0.13;
+        lg = g.createRadialGradient(lx, ly, 4, lx, ly, Math.max(w, h) * 0.30);
+        lg.addColorStop(0, 'rgba(255,214,140,0.24)');
+        lg.addColorStop(0.55, 'rgba(255,214,140,0.07)');
         lg.addColorStop(1, 'rgba(255,214,140,0)');
         g.fillStyle = lg;
         g.fillRect(0, 0, w, h);
+        poly(g, [[lx - 12, ly + 8], [lx + 12, ly + 8], [lx + 135, h], [lx - 135, h]],
+             'rgba(255,220,150,0.05)');
+        g.fillStyle = 'rgba(0,0,0,0.34)';
+        g.fillRect(lx - 1, 0, 2, ly - 8);
+        poly(g, [[lx - 17, ly], [lx + 17, ly], [lx + 9, ly - 11], [lx - 9, ly - 11]],
+             'rgba(38,28,16,0.85)');
+        disc(g, lx, ly + 1, 8, 3, 'rgba(255,230,170,0.92)');
       }
-      g.fillStyle = 'rgba(0,0,0,0.28)';
+      // 远处货架：层板 + 立柱 + 箱影，比单纯黑条更像仓库
       for (i = 0; i < 5; i++) {
-        var bx = rnd() * w;
-        var by = h * (0.06 + rnd() * 0.16);
-        g.fillRect(bx, by, 30 + rnd() * 50, 8);
+        bx = rnd() * w;
+        by = h * (0.05 + rnd() * 0.16);
+        bw2 = 44 + rnd() * 62;
+        g.fillStyle = 'rgba(0,0,0,0.28)';
+        g.fillRect(bx, by, bw2, 5);
+        g.fillRect(bx + 3, by, 4, 48);
+        g.fillRect(bx + bw2 - 7, by, 4, 48);
+        g.fillStyle = 'rgba(0,0,0,0.20)';
+        g.fillRect(bx + 11, by + 13, 18, 21);
+        g.fillRect(bx + bw2 - 30, by + 8, 16, 26);
       }
+      // 地面透视线 + 浮尘
+      g.strokeStyle = 'rgba(255,220,160,0.06)';
+      g.lineWidth = 1;
+      for (i = 0; i <= 8; i++) {
+        g.beginPath();
+        g.moveTo(w / 2, h * 0.70);
+        g.lineTo(i * w / 8, h);
+        g.stroke();
+      }
+      drawStars(g, w, h, 26, '#ffe4b0', 33, 1.1);
     } else if (sceneId === 'farm') {
-      // 白云 + 太阳 + 远处树影
-      g.fillStyle = '#ffe9a8';
-      g.beginPath();
-      g.arc(w * 0.84, h * 0.14, Math.min(w, h) * 0.07, 0, TAU);
-      g.fill();
-      var rnd2 = lcg(21);
-      g.fillStyle = 'rgba(255,255,255,0.85)';
-      for (i = 0; i < 4; i++) {
-        var cx = rnd2() * w;
-        var cy = h * (0.08 + rnd2() * 0.2);
-        var s = 0.7 + rnd2() * 0.8;
-        disc(g, cx, cy, 26 * s, 13 * s, 'rgba(255,255,255,0.85)');
-        disc(g, cx - 20 * s, cy + 4 * s, 16 * s, 10 * s, 'rgba(255,255,255,0.85)');
-        disc(g, cx + 18 * s, cy + 3 * s, 18 * s, 11 * s, 'rgba(255,255,255,0.85)');
+      // 太阳三层光晕 + 云 + 远山 + 田垄 + 树影
+      var rnd2 = lcg(21), cx, cy, s, tx, sx, sy;
+      disc(g, w * 0.84, h * 0.14, Math.min(w, h) * 0.20, Math.min(w, h) * 0.20, 'rgba(255,239,170,0.10)');
+      disc(g, w * 0.84, h * 0.14, Math.min(w, h) * 0.13, Math.min(w, h) * 0.13, 'rgba(255,239,170,0.16)');
+      disc(g, w * 0.84, h * 0.14, Math.min(w, h) * 0.07, Math.min(w, h) * 0.07, '#ffe9a8');
+      for (i = 0; i < 5; i++) {
+        cx = rnd2() * w;
+        cy = h * (0.08 + rnd2() * 0.2);
+        s = 0.7 + rnd2() * 0.8;
+        disc(g, cx, cy, 26 * s, 13 * s, 'rgba(255,255,255,0.88)');
+        disc(g, cx - 20 * s, cy + 4 * s, 16 * s, 10 * s, 'rgba(255,255,255,0.88)');
+        disc(g, cx + 18 * s, cy + 3 * s, 18 * s, 11 * s, 'rgba(255,255,255,0.88)');
+        disc(g, cx - 6 * s, cy - 8 * s, 15 * s, 9 * s, 'rgba(255,255,255,0.72)');
       }
-      g.fillStyle = 'rgba(47,77,34,0.35)';
-      for (i = 0; i < 6; i++) {
-        var tx = rnd2() * w;
-        disc(g, tx, h * 0.92, 18 + rnd2() * 16, 10 + rnd2() * 8, 'rgba(47,77,34,0.35)');
+      // 远山 + 田垄（低对比，不抢棋盘）
+      g.fillStyle = 'rgba(76,140,88,0.28)';
+      g.beginPath();
+      g.moveTo(0, h);
+      for (i = 0; i <= 10; i++) {
+        g.lineTo(i * w / 10, h * 0.80 - Math.sin(i * 1.25) * h * 0.05);
+      }
+      g.lineTo(w, h);
+      g.closePath();
+      g.fill();
+      g.strokeStyle = 'rgba(255,255,210,0.10)';
+      g.lineWidth = 3;
+      for (i = 1; i <= 5; i++) {
+        sy = h * (0.80 + i * 0.042);
+        g.beginPath();
+        g.moveTo(0, sy);
+        g.lineTo(w, sy + h * 0.012);
+        g.stroke();
+      }
+      for (i = 0; i < 8; i++) {
+        tx = rnd2() * w;
+        sx = 16 + rnd2() * 18;
+        g.fillStyle = 'rgba(47,77,34,0.30)';
+        g.fillRect(tx - 3, h * 0.90, 6, 18);
+        disc(g, tx, h * 0.90, sx, sx * 0.7, 'rgba(47,77,34,0.30)');
+        disc(g, tx - sx * 0.4, h * 0.91, sx * 0.6, sx * 0.45, 'rgba(70,120,55,0.26)');
       }
     } else if (sceneId === 'ice') {
       drawAurora(g, w, h);
-      drawStars(g, w, h, 40, '#ffffff', 5, 1.2);
+      drawStars(g, w, h, 52, '#ffffff', 5, 1.3);
+      // 远处冰山剪影 + 雪原亮带
+      g.fillStyle = 'rgba(120,175,215,0.20)';
+      g.beginPath();
+      g.moveTo(0, h);
+      g.lineTo(0, h * 0.88);
+      for (i = 0; i <= 8; i++) {
+        g.lineTo(i * w / 8, h * (0.80 + (i % 3) * 0.035));
+      }
+      g.lineTo(w, h);
+      g.closePath();
+      g.fill();
+      g.fillStyle = 'rgba(230,246,255,0.13)';
+      g.fillRect(0, h * 0.90, w, h * 0.10);
     } else if (sceneId === 'space') {
-      drawStars(g, w, h, 70, '#cfe0ff', 13, 1.6);
-      // 远处行星
+      drawStars(g, w, h, 90, '#cfe0ff', 13, 1.7);
+      // 星云柔光
+      var neb = g.createRadialGradient(w * 0.24, h * 0.30, 6, w * 0.24, h * 0.30, Math.max(w, h) * 0.36);
+      neb.addColorStop(0, 'rgba(120,90,210,0.20)');
+      neb.addColorStop(1, 'rgba(120,90,210,0)');
+      g.fillStyle = neb;
+      g.fillRect(0, 0, w, h);
+      // 舱板结构线：横向接缝 + 角部灯带
+      g.strokeStyle = 'rgba(150,165,230,0.09)';
+      g.lineWidth = 2;
+      for (i = 1; i <= 5; i++) {
+        g.beginPath();
+        g.moveTo(0, h * i / 6);
+        g.lineTo(w, h * i / 6);
+        g.stroke();
+      }
+      g.fillStyle = 'rgba(169,141,240,0.16)';
+      g.fillRect(0, 0, w, 5);
+      g.fillRect(0, h - 5, w, 5);
+      // 远处行星 + 光环
       var pg = g.createRadialGradient(w * 0.82, h * 0.18, 4, w * 0.82, h * 0.18, Math.min(w, h) * 0.16);
-      pg.addColorStop(0, '#7a5fc0');
+      pg.addColorStop(0, '#8f70d8');
+      pg.addColorStop(0.7, '#5a45a0');
       pg.addColorStop(1, '#2c2454');
       g.fillStyle = pg;
       g.beginPath();
       g.arc(w * 0.82, h * 0.18, Math.min(w, h) * 0.11, 0, TAU);
       g.fill();
-      g.strokeStyle = 'rgba(169,141,240,0.5)';
+      disc(g, w * 0.82 - Math.min(w, h) * 0.035, h * 0.18 - Math.min(w, h) * 0.035,
+           Math.min(w, h) * 0.035, Math.min(w, h) * 0.02, 'rgba(255,255,255,0.16)');
+      g.strokeStyle = 'rgba(190,160,255,0.55)';
       g.lineWidth = 3;
       g.beginPath();
       g.ellipse(w * 0.82, h * 0.18, Math.min(w, h) * 0.16, Math.min(w, h) * 0.05, -0.4, 0, TAU);
@@ -250,9 +352,24 @@
   // ---------- 地板 ----------
   function drawFloor(g, sceneId, x, y, s, opts) {
     var p = pal(sceneId);
-    var a = (Math.round(x / s) + Math.round(y / s)) % 2 === 0;
+    var gx = Math.round(x / s), gy = Math.round(y / s);
+    var a = (gx + gy) % 2 === 0;
     g.fillStyle = a ? p.floorA : p.floorB;
     g.fillRect(x, y, s + 0.5, s + 0.5);
+    // 左上受光 / 右下背光：每格像一块微凸的板
+    g.fillStyle = 'rgba(255,255,255,0.11)';
+    g.fillRect(x + 1, y + 1, s - 2, 2);
+    g.fillRect(x + 1, y + 1, 2, s - 2);
+    g.fillStyle = 'rgba(0,0,0,0.10)';
+    g.fillRect(x + 2, y + s - 3, s - 3, 2);
+    g.fillRect(x + s - 3, y + 2, 2, s - 4);
+    // 固定哈希的细碎材质点：不建对象、不拼颜色字符串
+    if ((gx * 7 + gy * 13) % 5 === 0) {
+      g.globalAlpha = 0.14;
+      g.fillStyle = p.dust;
+      g.fillRect(x + s * 0.28, y + s * 0.34, s * 0.08, s * 0.08);
+      g.globalAlpha = 1;
+    }
     // 板缝
     g.strokeStyle = p.line;
     g.globalAlpha = opts && opts.contrast ? 0.35 : 0.22;
@@ -274,21 +391,43 @@
       g.fillStyle = set.side;
       rr(g, x, y - lift + s * 0.16, s, s - s * 0.16 + lift, s * 0.12);
       g.fill();
+      // 侧面竖向材质纹 + 上缘亮线
+      g.fillStyle = 'rgba(0,0,0,0.10)';
+      g.fillRect(x + s * 0.26, y - lift + s * 0.20, 2, s * 0.72);
+      g.fillRect(x + s * 0.72, y - lift + s * 0.20, 2, s * 0.72);
+      g.fillStyle = 'rgba(255,255,255,0.12)';
+      g.fillRect(x + s * 0.05, y - lift + s * 0.18, s * 0.90, 2);
       g.fillStyle = set.top;
       rr(g, x, y - lift, s, s, s * 0.12);
       g.fill();
-      // 顶面刻线（砖缝 / 冰纹 / 舱板）
+      // 顶面受光带：立体块的高光来源
+      g.fillStyle = 'rgba(255,255,255,0.16)';
+      rr(g, x + s * 0.07, y - lift + s * 0.07, s * 0.86, s * 0.17, s * 0.05);
+      g.fill();
+      // 阶梯错缝：砖缝 / 木板的自然转折，比规整的 T 字更耐看；
+      // 降低不透明度，避免在冰雪这类浅色墙上变成刺眼的黑线。
       g.strokeStyle = set.edge;
-      g.lineWidth = Math.max(1, s * 0.05);
+      g.lineWidth = Math.max(1, s * 0.032);
+      g.globalAlpha = 0.52;
       g.beginPath();
-      g.moveTo(x + s * 0.18, y - lift + s * 0.5);
-      g.lineTo(x + s * 0.82, y - lift + s * 0.5);
-      g.moveTo(x + s * 0.5, y - lift + s * 0.5);
-      g.lineTo(x + s * 0.5, y - lift + s * 0.86);
+      g.moveTo(x + s * 0.13, y - lift + s * 0.42);
+      g.lineTo(x + s * 0.53, y - lift + s * 0.42);
+      g.moveTo(x + s * 0.53, y - lift + s * 0.42);
+      g.lineTo(x + s * 0.53, y - lift + s * 0.69);
+      g.moveTo(x + s * 0.53, y - lift + s * 0.69);
+      g.lineTo(x + s * 0.87, y - lift + s * 0.69);
       g.stroke();
+      g.globalAlpha = 1;
+      // 四角小铆钉
+      disc(g, x + s * 0.13, y - lift + s * 0.13, s * 0.035, s * 0.035, 'rgba(255,255,255,0.32)');
+      disc(g, x + s * 0.87, y - lift + s * 0.13, s * 0.035, s * 0.035, 'rgba(255,255,255,0.32)');
     } else {
       g.fillStyle = set.top;
       rr(g, x + s * 0.04, y + s * 0.04, s * 0.92, s * 0.92, s * 0.14);
+      g.fill();
+      // 平面模式也补一道顶部高光，避免整块死板
+      g.fillStyle = 'rgba(255,255,255,0.14)';
+      rr(g, x + s * 0.10, y + s * 0.09, s * 0.80, s * 0.16, s * 0.05);
       g.fill();
       g.strokeStyle = set.edge;
       g.lineWidth = Math.max(1, s * 0.06);
@@ -304,6 +443,12 @@
     var cy = y + s / 2;
     var pulse = 0.5 + 0.5 * Math.sin((t || 0) * 4.2);
     var r = s * (0.24 + pulse * 0.05);
+    // 目标点柔光：两层随呼吸胀缩的光斑，远看一眼能锁定
+    g.globalAlpha = 0.10 + pulse * 0.10;
+    disc(g, cx, cy, s * 0.47, s * 0.47, p.goal);
+    g.globalAlpha = 0.16 + pulse * 0.12;
+    disc(g, cx, cy, s * 0.36, s * 0.36, p.goal);
+    g.globalAlpha = 1;
     // 凹槽底
     g.fillStyle = 'rgba(0,0,0,0.28)';
     disc(g, cx, cy + s * 0.03, s * 0.30, s * 0.30, 'rgba(0,0,0,0.28)');
@@ -350,6 +495,16 @@
       rr(g, bx, by, bw, bw, s * 0.10);
       g.fill();
     }
+
+    // 顶面受光 + 左亮边 + 底部暗边：箱子脱离「一个色块」
+    var fy = by - (solid ? lift : 0);
+    g.fillStyle = 'rgba(255,255,255,0.22)';
+    rr(g, bx + bw * 0.09, fy + bw * 0.08, bw * 0.82, bw * 0.16, s * 0.05);
+    g.fill();
+    g.fillStyle = 'rgba(255,255,255,0.13)';
+    g.fillRect(bx + bw * 0.06, fy + bw * 0.10, bw * 0.05, bw * 0.80);
+    g.fillStyle = 'rgba(0,0,0,0.15)';
+    g.fillRect(bx + bw * 0.09, fy + bw * 0.88, bw * 0.82, bw * 0.06);
 
     // 场景化箱面细节
     if (sceneId === 'warehouse') {
@@ -408,8 +563,11 @@
     g.stroke();
 
     if (onGoal) {
-      // 到位高亮：金色/场景色呼吸圈
+      // 到位高亮：金色/场景色柔光 + 呼吸圈
       var pulse = 0.5 + 0.5 * Math.sin((opts && opts.t || 0) * 5);
+      g.globalAlpha = 0.14 + pulse * 0.12;
+      disc(g, bx + bw / 2, by - (solid ? lift : 0) + bw / 2,
+           bw * 0.78, bw * 0.78, onGoalGlow(sceneId));
       g.globalAlpha = 0.35 + pulse * 0.35;
       g.strokeStyle = onGoalGlow(sceneId);
       g.lineWidth = Math.max(2, s * 0.08);
@@ -464,6 +622,11 @@
       g.fillRect(cx - r * 1.1, bodyY - r * 0.35, r * 0.5, r * 0.9); // 背包
       g.fillRect(cx + r * 0.6, bodyY - r * 0.35, r * 0.5, r * 0.9);
     }
+
+    // 身体左上受光：圆滚滚的角色不再是平面色块
+    g.globalAlpha = 0.22;
+    disc(g, cx - r * 0.34, bodyY - r * 0.40, r * 0.44, r * 0.20, '#ffffff');
+    g.globalAlpha = 1;
 
     // 脸（朝向偏移）
     var fx = 0, fy = 0;

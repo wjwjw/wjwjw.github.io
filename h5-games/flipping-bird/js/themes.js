@@ -113,52 +113,96 @@
 
   function drawSkyBack(g, w, h) {
     var grad = g.createLinearGradient(0, 0, 0, h);
-    grad.addColorStop(0, '#63b9ec');
-    grad.addColorStop(0.55, '#a9dcf7');
-    grad.addColorStop(1, '#e8f6ff');
+    grad.addColorStop(0, '#4ea6e4');
+    grad.addColorStop(0.42, '#8fd0f2');
+    grad.addColorStop(0.76, '#c8eaf9');
+    grad.addColorStop(1, '#f2fbff');
     g.fillStyle = grad;
     g.fillRect(0, 0, w, h);
 
-    // 太阳：柔光用三层半透明圆，不用径向渐变（离屏一次绘制，成本可忽略）
-    disc(g, w * 0.82, h * 0.18, 78, 78, 'rgba(255,226,140,0.16)');
-    disc(g, w * 0.82, h * 0.18, 56, 56, 'rgba(255,226,140,0.20)');
+    // 太阳：离屏径向柔光（一次生成，不会出现同心圆硬边）+ 日轮 + 左上高光
+    var sun = g.createRadialGradient(w * 0.82, h * 0.18, 6, w * 0.82, h * 0.18, 124);
+    sun.addColorStop(0, 'rgba(255,236,170,0.42)');
+    sun.addColorStop(0.28, 'rgba(255,228,150,0.20)');
+    sun.addColorStop(1, 'rgba(255,226,140,0)');
+    g.fillStyle = sun;
+    g.fillRect(w * 0.82 - 124, h * 0.18 - 124, 248, 248);
     disc(g, w * 0.82, h * 0.18, 34, 34, '#ffe89a', '#ffd166', 3);
+    disc(g, w * 0.82 - 10, h * 0.18 - 11, 9, 9, 'rgba(255,255,255,0.50)');
 
-    var rnd = lcg(20261108), i;
-    for (i = 0; i < 9; i++) {
+    // 高空卷云：细长横向亮带，拉开空间纵深
+    var rnd = lcg(20261108), i, cx, cy;
+    for (i = 0; i < 7; i++) {
+      cx = rnd() * w;
+      cy = h * (0.06 + rnd() * 0.34);
+      disc(g, cx, cy, 60 + rnd() * 70, 3 + rnd() * 3, 'rgba(255,255,255,0.16)');
+      disc(g, cx + 26, cy + 5, 30 + rnd() * 30, 2, 'rgba(255,255,255,0.12)');
+    }
+    for (i = 0; i < 11; i++) {
       cloud(g, rnd() * (w + 160) - 80, h * (0.10 + rnd() * 0.44),
             0.7 + rnd() * 0.85, '#ffffff', 0.30 + rnd() * 0.24);
     }
-    // 远处淡蓝丘陵（贴着地平线，给「高度」一个参照）
-    g.fillStyle = 'rgba(120,178,205,0.34)';
-    g.beginPath();
-    g.moveTo(0, h);
-    for (i = 0; i <= 12; i++) {
-      g.lineTo(i * w / 12, h * 0.80 - Math.sin(i * 1.7) * h * 0.045);
+    // 两层远山：越远越淡，山脊带一线亮边，给「高度」一个参照
+    var hills = [
+      { y: 0.775, amp: 0.050, color: 'rgba(120,178,205,0.22)' },
+      { y: 0.835, amp: 0.038, color: 'rgba(88,150,190,0.30)' }
+    ];
+    var li;
+    for (li = 0; li < hills.length; li++) {
+      g.fillStyle = hills[li].color;
+      g.beginPath();
+      g.moveTo(0, h);
+      for (i = 0; i <= 12; i++) {
+        g.lineTo(i * w / 12, h * hills[li].y - Math.sin(i * 1.7 + li) * h * hills[li].amp);
+      }
+      g.lineTo(w, h);
+      g.closePath();
+      g.fill();
     }
-    g.lineTo(w, h);
-    g.closePath();
-    g.fill();
+    // 地平线大气雾：底部提亮，远近自然过渡
+    var haze = g.createLinearGradient(0, h * 0.70, 0, h);
+    haze.addColorStop(0, 'rgba(255,255,255,0)');
+    haze.addColorStop(1, 'rgba(240,251,255,0.68)');
+    g.fillStyle = haze;
+    g.fillRect(0, h * 0.70, w, h * 0.30);
   }
 
   function drawMeadowBack(g, w, h) {
     var grad = g.createLinearGradient(0, 0, 0, h);
-    grad.addColorStop(0, '#9fdcf0');
-    grad.addColorStop(0.48, '#cdeec0');
-    grad.addColorStop(1, '#f3f7cb');
+    grad.addColorStop(0, '#88d0ee');
+    grad.addColorStop(0.46, '#cdeec0');
+    grad.addColorStop(1, '#f7f8cf');
     g.fillStyle = grad;
     g.fillRect(0, 0, w, h);
 
-    disc(g, w * 0.18, h * 0.16, 46, 46, 'rgba(255,245,190,0.28)');
-    disc(g, w * 0.18, h * 0.16, 26, 26, '#fff3c4');
+    // 晨光：径向柔光 + 日轮 + 斜射光带
+    var sun = g.createRadialGradient(w * 0.18, h * 0.16, 4, w * 0.18, h * 0.16, 108);
+    sun.addColorStop(0, 'rgba(255,248,205,0.48)');
+    sun.addColorStop(0.32, 'rgba(255,245,190,0.20)');
+    sun.addColorStop(1, 'rgba(255,245,190,0)');
+    g.fillStyle = sun;
+    g.fillRect(w * 0.18 - 108, h * 0.16 - 108, 216, 216);
+    disc(g, w * 0.18, h * 0.16, 26, 26, '#fff3c4', '#ffe9a0', 2);
+    poly(g, [[w * 0.18, h * 0.16], [w * 0.44, 0], [w * 0.62, 0], [w * 0.24, h * 0.16]],
+         'rgba(255,250,210,0.10)');
 
     var rnd = lcg(20261108), i;
-    for (i = 0; i < 4; i++) {
+    for (i = 0; i < 5; i++) {
       cloud(g, rnd() * (w + 160) - 80, h * (0.10 + rnd() * 0.24),
             0.7 + rnd() * 0.6, '#ffffff', 0.45 + rnd() * 0.20);
     }
+    // 远处的淡绿丘陵（在树丛之前，垫一层地形）
+    g.fillStyle = 'rgba(120,180,120,0.28)';
+    g.beginPath();
+    g.moveTo(0, h);
+    for (i = 0; i <= 10; i++) {
+      g.lineTo(i * w / 10, h * 0.72 - Math.sin(i * 1.35) * h * 0.045);
+    }
+    g.lineTo(w, h);
+    g.closePath();
+    g.fill();
 
-    // 远处树丛：三层圆团树冠 + 短树干，越远越淡
+    // 远处树丛：三层圆团树冠 + 短树干，越远越淡；冠顶补一道亮边
     var layers = [
       { y: 0.74, r: 0.070, color: 'rgba(84,140,86,0.42)' },
       { y: 0.80, r: 0.085, color: 'rgba(60,120,70,0.55)' },
@@ -176,55 +220,106 @@
         disc(g, x, cy, cr, cr * 0.78, layers[li].color);
         disc(g, x - cr * 0.55, cy + cr * 0.20, cr * 0.65, cr * 0.55, layers[li].color);
         disc(g, x + cr * 0.55, cy + cr * 0.22, cr * 0.62, cr * 0.52, layers[li].color);
+        disc(g, x - cr * 0.18, cy - cr * 0.40, cr * 0.44, cr * 0.18, 'rgba(190,235,150,0.20)');
       }
     }
 
     // 前景草丛：三层深浅草叶，固定 LCG 种子 —— 「有草丛」的主要视觉依据
-    var grass = ['#6fb257', '#549b45', '#3f8039'];
+    var grass = ['#7fbd5f', '#5da34a', '#3f8039'];
     var gi, gx, gy, gl, rg;
     for (gi = 0; gi < 3; gi++) {
       rg = lcg(4477 + gi * 61);
-      for (i = 0; i < 46; i++) {
+      for (i = 0; i < 52; i++) {
         gx = rg() * w;
         gy = h * (0.87 + gi * 0.045 + rg() * 0.08);
         gl = 14 + rg() * (18 + gi * 8);
         poly(g, [[gx - 4 - gi, gy], [gx + (rg() - 0.5) * 10, gy - gl],
                  [gx + 4 + gi, gy]], grass[gi]);
+        if (gi === 0 && i % 3 === 0) {
+          poly(g, [[gx - 1, gy - 2], [gx + (rg() - 0.5) * 8, gy - gl * 0.72],
+                   [gx + 1, gy - 2]], 'rgba(220,255,180,0.35)');
+        }
       }
     }
-    // 草丛里的小野花
+    // 草丛里的小野花：花瓣 + 花心
     var rf = lcg(7788), fx2, fy2;
-    for (i = 0; i < 16; i++) {
+    for (i = 0; i < 20; i++) {
       fx2 = rf() * w;
       fy2 = h * (0.88 + rf() * 0.10);
-      disc(g, fx2, fy2, 3.4, 3.4, i % 3 === 0 ? '#ff9f9f' : '#fff0a8');
+      disc(g, fx2, fy2, 4.2, 4.2, i % 3 === 0 ? '#ff9f9f' : '#fff0a8');
+      disc(g, fx2, fy2, 1.5, 1.5, '#e8a13c');
     }
+    // 地表薄雾：把远景与前景草丛轻轻分开
+    var haze = g.createLinearGradient(0, h * 0.76, 0, h * 0.94);
+    haze.addColorStop(0, 'rgba(255,255,235,0)');
+    haze.addColorStop(1, 'rgba(255,255,225,0.36)');
+    g.fillStyle = haze;
+    g.fillRect(0, h * 0.76, w, h * 0.18);
   }
 
   function drawOceanBack(g, w, h) {
     var grad = g.createLinearGradient(0, 0, 0, h);
-    grad.addColorStop(0, '#2b86ad');
-    grad.addColorStop(0.5, '#12547f');
-    grad.addColorStop(1, '#082c4c');
+    grad.addColorStop(0, '#2f93ba');
+    grad.addColorStop(0.28, '#1a6c9c');
+    grad.addColorStop(0.68, '#104b74');
+    grad.addColorStop(1, '#072541');
     g.fillStyle = grad;
     g.fillRect(0, 0, w, h);
 
-    // 水面透下来的斜光束
+    // 水面波光：顶部亮带 + 几道起伏波纹
+    var surf = g.createLinearGradient(0, 0, 0, h * 0.16);
+    surf.addColorStop(0, 'rgba(190,240,255,0.34)');
+    surf.addColorStop(1, 'rgba(190,240,255,0)');
+    g.fillStyle = surf;
+    g.fillRect(0, 0, w, h * 0.16);
     var i, x0;
+    for (i = 0; i < 6; i++) {
+      disc(g, w * (0.08 + i * 0.17), h * (0.02 + (i % 3) * 0.012),
+           34 + i * 6, 2.6, 'rgba(220,250,255,0.22)');
+    }
+    // 水面透下来的斜光束：宽淡光 + 窄亮芯
     for (i = 0; i < 4; i++) {
       x0 = w * (0.12 + i * 0.24);
-      poly(g, [[x0, 0], [x0 + 46, 0], [x0 + 150, h * 0.86], [x0 + 96, h * 0.86]],
-           'rgba(180,235,255,0.07)');
+      poly(g, [[x0, 0], [x0 + 62, 0], [x0 + 176, h * 0.86], [x0 + 92, h * 0.86]],
+           'rgba(180,235,255,0.065)');
+      poly(g, [[x0 + 18, 0], [x0 + 34, 0], [x0 + 128, h * 0.80], [x0 + 108, h * 0.80]],
+           'rgba(210,245,255,0.055)');
     }
-    // 远处鱼群 / 水母剪影
+    // 远处鱼群 / 水母剪影（两层深浅，拉开距离感）
     var rnd = lcg(4412);
-    for (i = 0; i < 11; i++) {
+    for (i = 0; i < 13; i++) {
       var fx = rnd() * w, fy = h * (0.18 + rnd() * 0.52), s = 3 + rnd() * 4;
-      poly(g, [[fx - s * 1.8, fy], [fx + s, fy - s * 0.8], [fx + s, fy + s * 0.8]],
-           'rgba(180,230,245,0.13)');
-      poly(g, [[fx + s, fy - s * 0.8], [fx + s * 2, fy - s * 1.4], [fx + s * 2, fy + s * 1.4], [fx + s, fy + s * 0.8]],
-           'rgba(180,230,245,0.13)');
+      var tint = i % 3 === 0 ? 'rgba(180,230,245,0.20)' : 'rgba(180,230,245,0.11)';
+      poly(g, [[fx - s * 1.8, fy], [fx + s, fy - s * 0.8], [fx + s, fy + s * 0.8]], tint);
+      poly(g, [[fx + s, fy - s * 0.8], [fx + s * 2, fy - s * 1.4], [fx + s * 2, fy + s * 1.4], [fx + s, fy + s * 0.8]], tint);
     }
+    // 海床沙丘 + 海草剪影：给深蓝底部一个「底」，不再是一片渐变
+    g.fillStyle = 'rgba(12,52,74,0.55)';
+    g.beginPath();
+    g.moveTo(0, h);
+    for (i = 0; i <= 10; i++) {
+      g.lineTo(i * w / 10, h * 0.94 - Math.sin(i * 1.3) * h * 0.035);
+    }
+    g.lineTo(w, h);
+    g.closePath();
+    g.fill();
+    var rw = lcg(6613), wx, wh;
+    for (i = 0; i < 16; i++) {
+      wx = rw() * w;
+      wh = 18 + rw() * 34;
+      g.strokeStyle = 'rgba(60,170,150,0.28)';
+      g.lineWidth = 2 + rw() * 2;
+      g.lineCap = 'round';
+      g.beginPath();
+      g.moveTo(wx, h);
+      g.quadraticCurveTo(wx + 8, h - wh * 0.6, wx + (rw() - 0.5) * 18, h - wh);
+      g.stroke();
+    }
+    var deep = g.createLinearGradient(0, h * 0.72, 0, h);
+    deep.addColorStop(0, 'rgba(3,18,34,0)');
+    deep.addColorStop(1, 'rgba(3,18,34,0.48)');
+    g.fillStyle = deep;
+    g.fillRect(0, h * 0.72, w, h * 0.28);
   }
 
   function buildBackdrop(sceneId, w, h, dpr) {
@@ -241,11 +336,20 @@
   function drawMotion(g, sceneId, w, h, t) {
     var i, x, y, k;
     if (sceneId === 'sky') {
+      // 远层慢云（更大更淡）+ 近层快云，两层速度差形成视差
+      for (i = 0; i < 2; i++) {
+        k = (t * 5 + i * (w / 2)) % (w + 320);
+        x = w + 160 - k;
+        y = h * (0.10 + i * 0.20);
+        cloud(g, x, y, 2.3, '#ffffff', 0.13);
+      }
       for (i = 0; i < 3; i++) {
         k = (t * 13 + i * (w / 3)) % (w + 220);
         x = w + 110 - k;
         y = h * (0.16 + i * 0.13);
-        cloud(g, x, y, 1.5 + i * 0.22, '#ffffff', 0.24);
+        disc(g, x + 4, y + 7, 38, 9, 'rgba(90,150,190,0.07)');
+        cloud(g, x, y, 1.5 + i * 0.22, '#ffffff', 0.28);
+        disc(g, x - 8, y - 7, 14, 5, 'rgba(255,255,255,0.22)');
       }
     } else if (sceneId === 'meadow') {
       // 飘飞的蒲公英种子：小绒球 + 三根绒毛线，相位固定，resize 后连续
@@ -254,6 +358,7 @@
       for (i = 0; i < 12; i++) {
         x = (w * (i * 0.137 % 1) + Math.sin(t * 0.7 + i) * 26 + w) % w;
         y = (h * (i * 0.211 % 1) + t * (10 + i % 4 * 5)) % (h + 30) - 15;
+        disc(g, x, y, 7, 7, 'rgba(255,255,220,0.14)');
         disc(g, x, y, 2.6, 2.6, 'rgba(255,255,255,0.78)');
         g.beginPath();
         g.moveTo(x, y);
@@ -275,29 +380,48 @@
         g.beginPath();
         g.arc(x, y, k, 0, TAU);
         g.stroke();
+        disc(g, x - k * 0.32, y - k * 0.34, 1.1, 1.1, 'rgba(220,250,255,0.42)');
       }
     }
   }
 
   // ---------- 地面 ----------
+  // 分层色带模拟自上而下的受光，代替每帧建渐变（STANDARD §10.3）。
+  // 颜色表提到模块级：渲染循环里不建对象、不拼 rgba 字符串。
+  var GROUND = {
+    // 天空套脚下是云海平台（不是草地），和草丛套一眼分得开
+    sky:    { base: '#eaf6ff', hi: '#ffffff', band: '#d8edfb', mid: '#cde6f8',
+              deep: '#a9cfe8', mark: 'rgba(110,165,205,0.22)', glint: 'rgba(255,255,255,0.85)' },
+    meadow: { base: '#5fae63', hi: '#bde98e', band: '#79c46f', mid: '#68b45f',
+              deep: '#357a41', mark: 'rgba(30,90,50,0.26)', glint: 'rgba(220,255,180,0.75)' },
+    ocean:  { base: '#d9b98a', hi: '#fff2cf', band: '#e7c99a', mid: '#d5b183',
+              deep: '#9c7a52', mark: 'rgba(90,70,50,0.22)', glint: 'rgba(255,248,225,0.80)' }
+  };
+
   function drawGround(g, sceneId, w, groundY, t) {
     var h = 540 - groundY;
-    var i, x, base, top, mark;
-    if (sceneId === 'ocean') {
-      base = '#d9b98a'; top = 'rgba(255,244,214,0.55)'; mark = 'rgba(90,70,50,0.22)';
-    } else if (sceneId === 'meadow') {
-      base = '#5fae63'; top = 'rgba(190,240,150,0.75)'; mark = 'rgba(30,90,50,0.26)';
-    } else {
-      // 天空套脚下是云海平台（不是草地），和草丛套一眼分得开
-      base = '#eaf6ff'; top = 'rgba(255,255,255,0.92)'; mark = 'rgba(110,165,205,0.22)';
-    }
-    g.fillStyle = base;
+    var C = GROUND[sceneId] || GROUND.sky;
+    var i, x, off;
+    g.fillStyle = C.base;
     g.fillRect(0, groundY, w, h);
-    g.fillStyle = top;
+    // 顶面高光 → 亮带 → 主体 → 底部渐深，四层纯色叠出厚度
+    g.fillStyle = C.hi;
     g.fillRect(0, groundY, w, 7);
-    g.fillStyle = mark;
+    g.fillStyle = C.band;
+    g.fillRect(0, groundY + 7, w, 9);
+    g.fillStyle = C.mid;
+    g.fillRect(0, groundY + 16, w, 14);
+    g.fillStyle = C.deep;
+    g.fillRect(0, groundY + h - 13, w, 13);
+    g.fillStyle = C.glint;
+    g.fillRect(0, groundY, w, 2);
+    // 与场景交界的一道投影：地面立刻「立」起来
+    g.fillStyle = 'rgba(0,0,0,0.20)';
+    g.fillRect(0, groundY - 3, w, 3);
+
     // 滚动纹理：让「世界在向后退」这件事有视觉依据
-    var off = (t * 90) % 48;
+    off = (t * 90) % 48;
+    g.fillStyle = C.mark;
     for (i = -1; i < Math.ceil(w / 48) + 1; i++) {
       x = i * 48 - off;
       if (sceneId === 'sky') {
@@ -313,6 +437,12 @@
         g.fillRect(x + 28, groundY + 36, 10, 4);
       }
     }
+    // 纹理上方再补一层细亮线，避免刻痕看起来是「脏点」
+    g.fillStyle = 'rgba(255,255,255,0.22)';
+    for (i = -1; i < Math.ceil(w / 48) + 1; i++) {
+      x = i * 48 - off;
+      g.fillRect(x + 6, groundY + 10, 16, 2);
+    }
     g.fillStyle = 'rgba(0,0,0,0.12)';
     g.fillRect(0, groundY + h - 6, w, 6);
   }
@@ -327,14 +457,23 @@
     var c = CAP_FILL[sceneId] || CAP_FILL.sky;
     var e = CAP_EDGE[sceneId] || CAP_EDGE.sky;
     var cy = up ? y - 12 : y;
+    // 柱帽下的投影
+    rr(g, x - 6, cy + 4, pw + 16, 24, 7);
+    g.fillStyle = 'rgba(0,0,0,0.22)';
+    g.fill();
     rr(g, x - 8, cy, pw + 16, 24, 7);
     g.fillStyle = c;
     g.fill();
     g.lineWidth = 3;
     g.strokeStyle = e;
     g.stroke();
-    g.fillStyle = 'rgba(255,255,255,0.45)';
-    g.fillRect(x - 3, cy + 4, pw + 6, 4);
+    // 顶面高光 + 底面暗边 + 两端铆钉，做出倒角厚度
+    g.fillStyle = 'rgba(255,255,255,0.72)';
+    g.fillRect(x - 3, cy + 3, pw + 6, 4);
+    g.fillStyle = 'rgba(0,0,0,0.16)';
+    g.fillRect(x - 3, cy + 19, pw + 6, 3);
+    disc(g, x + 1, cy + 12, 2.2, 2.2, 'rgba(255,255,255,0.70)');
+    disc(g, x + pw - 1, cy + 12, 2.2, 2.2, 'rgba(255,255,255,0.70)');
   }
 
   function drawColumn(g, sceneId, x, y0, y1, pw, isTop) {
@@ -399,6 +538,15 @@
         disc(g, x + 16 + (i % 3) * 18, yy, 4, 4, 'rgba(190,238,255,0.45)');
       }
     }
+    // 左受光 / 右背光：平涂的柱子立刻有圆柱体积
+    g.fillStyle = 'rgba(255,255,255,0.22)';
+    g.fillRect(x + 3, y0, Math.max(4, pw * 0.10), h);
+    g.fillStyle = 'rgba(255,255,255,0.09)';
+    g.fillRect(x + pw * 0.16, y0, 4, h);
+    g.fillStyle = 'rgba(0,0,0,0.13)';
+    g.fillRect(x + pw - 9, y0, 9, h);
+    g.fillStyle = 'rgba(0,0,0,0.10)';
+    g.fillRect(x, y0, pw, 3);
     g.restore();
 
     // 外描边：障碍边界必须一眼看清（10-foot 距离下的可玩性红线）
@@ -423,12 +571,37 @@
   }
 
   // ---------- 角色 ----------
+  // 角色柔光：离屏径向渐变一次生成，每帧只 drawImage；
+  // 用实心圆叠光晕会出现可见的同心圆硬边，这里换成真正的柔和过渡。
+  var HALO_COLORS = {
+    plane:  ['rgba(255,240,190,0.30)', 'rgba(255,224,150,0.10)'],
+    turtle: ['rgba(160,255,205,0.30)', 'rgba(120,230,175,0.10)'],
+    whale:  ['rgba(150,220,255,0.32)', 'rgba(120,205,255,0.11)']
+  };
+  var HALO_CACHE = {};
+  function haloSprite(charId) {
+    var c = HALO_CACHE[charId];
+    if (c) return c;
+    var col = HALO_COLORS[charId] || HALO_COLORS.plane;
+    c = makeCanvas(96, 96, 1);
+    var g = c.getContext('2d');
+    var grad = g.createRadialGradient(48, 48, 3, 48, 48, 48);
+    grad.addColorStop(0, col[0]);
+    grad.addColorStop(0.5, col[1]);
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 96, 96);
+    HALO_CACHE[charId] = c;
+    return c;
+  }
+
   function drawCharacter(g, charId, x, y, vy, t, flap, invincible) {
     var ang = vy / 760;
     if (ang < -0.38) ang = -0.38;
     if (ang > 0.52) ang = 0.52;
     var wing = Math.sin(flap * TAU) * 0.55;   // flap: 0..1，一次拍动的相位
     var a = g.globalAlpha;
+    g.drawImage(haloSprite(charId), x - 48, y - 48, 96, 96);
     if (invincible && Math.floor(t * 9) % 2 === 0) g.globalAlpha = 0.32;
 
     g.save();
@@ -444,6 +617,7 @@
       // 龟壳
       disc(g, -3, 0, 21, 16, '#3fa96b', INK, 2.6);
       disc(g, -3, -3, 13, 9, '#62c98b');
+      disc(g, -8, -8, 8, 3, 'rgba(255,255,255,0.28)');
       poly(g, [[-13, 1], [-7, -7], [1, -7], [6, 1], [0, 9], [-8, 9]], null, 'rgba(20,80,50,0.55)', 2);
       // 头 + 脸
       disc(g, 19, 4, 11, 10, '#8ee0a8', INK, 2.4);
@@ -456,6 +630,7 @@
       poly(g, [[-20, 0], [-34, -12 - wing * 7], [-30, 0], [-34, 12 + wing * 7]], '#3f7fc4', INK, 2.4);
       // 身体 + 白肚皮
       disc(g, 0, 0, 25, 15, '#4a90d9', INK, 2.6);
+      disc(g, -6, -8, 13, 3.5, 'rgba(255,255,255,0.30)');
       disc(g, 3, 7, 19, 8, '#eaf6ff');
       // 背鳍
       poly(g, [[-6, -13], [-1, -23], [7, -12]], '#3f7fc4', INK, 2);
@@ -474,6 +649,9 @@
       poly(g, [[-8, 6], [4, 18 + wing * 6], [10, 6]], '#e0524f', INK, 2);
       poly(g, [[-18, -4], [-25, -14], [-15, -3]], '#ffd166', INK, 2);
       disc(g, 0, 0, 24, 11, '#fffcf2', INK, 2.6);
+      disc(g, -4, -5, 15, 2.8, 'rgba(190,225,255,0.75)');
+      g.fillStyle = 'rgba(90,140,190,0.22)';
+      g.fillRect(-15, 6, 22, 3);
       g.fillStyle = '#ffd166';
       g.fillRect(-13, 3, 21, 6);
       disc(g, 22, 0, 8, 9, '#ff8c42', INK, 2);

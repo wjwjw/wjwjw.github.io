@@ -253,6 +253,30 @@ sandboxWindow.SokoThemes.PACKS.forEach(function (p) {
     '套装 ' + p.id + ' 的角色/场景存在');
 });
 
+// 程序化绘制最容易在冷门分支里漏工具函数（只在真实 Chrome 里才炸）。
+// 这里把四套场景的背景 + 地板/墙/箱/目标/角色逐一跑一遍，含平面与高对比两种风格。
+var artCtx = makeCtx2D();
+sandboxWindow.SokoThemes.SCENES.forEach(function (sc) {
+  var artOpts = { solid: true, contrast: false, t: 1.2 };
+  var flatOpts = { solid: false, contrast: true, t: 1.2 };
+  var artOk = true;
+  try {
+    sandboxWindow.SokoThemes.buildBackdrop(sc.id, 960, 540, 1, artOpts);
+    sandboxWindow.SokoThemes.drawFloor(artCtx, sc.id, 100, 100, 64, artOpts);
+    sandboxWindow.SokoThemes.drawWall(artCtx, sc.id, 100, 100, 64, artOpts);
+    sandboxWindow.SokoThemes.drawWall(artCtx, sc.id, 100, 100, 64, flatOpts);
+    sandboxWindow.SokoThemes.drawGoal(artCtx, sc.id, 100, 100, 64, artOpts, 1.2);
+    sandboxWindow.SokoThemes.drawBox(artCtx, sc.id, 100, 100, 64, artOpts, true);
+    sandboxWindow.SokoThemes.drawBox(artCtx, sc.id, 100, 100, 64, flatOpts, false);
+    sandboxWindow.SokoThemes.CHARACTERS.forEach(function (ch) {
+      sandboxWindow.SokoThemes.drawCharacter(artCtx, ch.id, 132, 150, 64, 'right', 0.4, artOpts);
+    });
+  } catch (e) {
+    artOk = false;
+  }
+  assert(artOk, '场景 ' + sc.id + ' 全套绘制分支不抛异常');
+});
+
 S.setPack(2); // 冰雪小企鹅
 assert(S.theme().charId === 'penguin' && S.theme().sceneId === 'ice', '套装一键整配（冰雪）');
 S.setChar('astro');
