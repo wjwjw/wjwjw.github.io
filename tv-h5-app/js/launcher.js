@@ -40,7 +40,10 @@
   var modeTag = document.getElementById("modeTag");
   var toastEl = document.getElementById("toast");
   var overlay = document.getElementById("gameOverlay");
-  var iframe = document.getElementById("gameFrame");
+  // iframe 不再放在 HTML 里复用，改为每次进入游戏动态创建、返回时销毁。
+  // 老 WebView（Android 6 / Chromium 47）复用同一个 iframe 反复 src 导航时，
+  // 第二次的 load 经常不触发，游戏白屏 —— 表现为「返回后打不开另一个游戏」。
+  var iframe = null;
   var backBtn = document.getElementById("backBtn");
   var gameStatus = document.getElementById("gameStatus");
   var gsTitle = document.getElementById("gsTitle");
@@ -157,27 +160,51 @@
     openGame(url, g);
   }
 
+  // 每次进入游戏都创建一个全新的 iframe。老 WebView（Chromium 47）复用同一
+  // iframe 反复 src 导航（游戏 → about:blank → 游戏）时第二次 load 常不触发，
+  // 导致白屏；全新节点 = 全新 browsing context，可彻底规避。
   function openGame(url, g) {
+    closeGameFrame();                       // 先销毁可能残留的旧 frame
     gameOpen = true;
     overlay.classList.add("open");
     overlay.setAttribute("aria-hidden", "false");
-    iframe.src = url;
-    iframe.dataset.tvControls = (g.tvControls === false ? "0" : "1");
+
+    var f = document.createElement("iframe");
+    f.id = "gameFrame";
+    f.frameBorder = "0";
+    f.setAttribute("allow", "autoplay; fullscreen; gamepad");
+    f.dataset.tvControls = (g && g.tvControls === false ? "0" : "1");
+    f.addEventListener("load", onGameFrameLoad);
+    iframe = f;
+    overlay.appendChild(f);
+    f.src = url;                            // append 后再赋值 src，确保 load 事件被捕获
+  }
+
+  // 返回大厅：把 iframe 从 DOM 中彻底移除，而不是只把 src 设成 about:blank。
+  // 这样旧游戏的 JS 定时器 / 音频 / 事件监听随节点一起被 GC，不留隐患。
+  function closeGameFrame() {
+    if (!iframe) return;
+    var f = iframe;
+    iframe = null;                          // 先置空，避免 load 回调误注入
+    try { f.contentWindow && f.contentWindow.stop && f.contentWindow.stop(); } catch (e) {}
+    f.removeEventListener("load", onGameFrameLoad);
+    try { f.src = "about:blank"; } catch (e) {}
+    if (f.parentNode) f.parentNode.removeChild(f);
   }
 
   function closeGame() {
     if (!gameOpen) return;
     gameOpen = false;
-    try { iframe.contentWindow && iframe.contentWindow.stop && iframe.contentWindow.stop(); } catch (e) {}
-    iframe.src = "about:blank";
+    closeGameFrame();
     overlay.classList.remove("open");
     overlay.setAttribute("aria-hidden", "true");
     select(selected);
   }
 
   // 给同源 iframe 注入 TV 遥控增强脚本（跨域则跳过）
-  iframe.addEventListener("load", function () {
-    if (!gameOpen) return;
+  function onGameFrameLoad() {
+    if (!gameOpen || !iframe) return;
+    if (this !== iframe) return;             // 忽略已销毁的旧 frame 的迟到 load 事件
     if (iframe.dataset.tvControls === "0") return;
     try {
       var doc = iframe.contentDocument;
@@ -188,7 +215,7 @@
         doc.body.appendChild(s);
       }
     } catch (e) { /* 跨域则跳过 */ }
-  });
+  }
 
   backBtn.addEventListener("click", closeGame);
 
@@ -206,7 +233,7 @@
   }
 
   function forwardKey(e) {
-    if (!gameOpen || !iframe.contentWindow) return;
+    if (!gameOpen || !iframe || !iframe.contentWindow) return;
     var map = { 37: "ArrowLeft", 39: "ArrowRight", 38: "ArrowUp", 40: "ArrowDown", 13: "Enter", 32: " " };
     var key = (e.key && e.key !== "Unidentified") ? e.key : (map[e.keyCode] || "");
     if (!key) return;

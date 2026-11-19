@@ -42,7 +42,7 @@
 
     <div class="game-overlay" id="gameOverlay" aria-hidden="true">
       <button class="back-btn" id="backBtn" type="button">← 返回菜单</button>
-      <iframe id="gameFrame" frameborder="0" allow="autoplay; fullscreen; gamepad"></iframe>
+      <!-- gameFrame 由 launcher.js 在进入游戏时动态创建、返回时移除，避免老 WebView 复用 iframe 导航失败 -->
     </div>
   </div>
 
