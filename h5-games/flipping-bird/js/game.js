@@ -10,7 +10,8 @@
  *   ① 三颗心 + 撞击后短暂无敌闪烁，撞一次不会立刻结束；
  *   ② 障碍缺口 176（比经典宽）、判定盒收缩 6px（宽容判定）；
  *   ③ 撞到天花板不致死（贴住后速度为 0），无敌期内触地也贴地站立不下沉；开局有 3-2-1 倒计时；
- *   ④ 速度有上限（280），不会越玩越不可能。
+ *   ④ 速度有上限（280），不会越玩越不可能；
+ *   ⑤ 全程下落慢 30%（重力与最大下落速度都按 70% 缩放），更好反应。
  *
  * 为什么适合电视遥控器（STANDARD §4）：只需要 OK 一个键，不需要指针与拖拽；
  * 标题页的搭配选择是普通 button，standalone 用 TVNav、启动器内由 tv-controls 做空间导航，
@@ -29,7 +30,8 @@
   var GROUND_H = 66, GROUND_Y = H - GROUND_H;
   var PLAYER_X = 268, PLAYER_W = 42, PLAYER_H = 30;
   var PIPE_W = 78, GAP_H = 176;
-  var GRAVITY = 1350, FLAP_V = -430, MAX_FALL = 720;
+  // 下落全程慢 30%：原基准 1350 / 720 乘 0.7；拍翅膀与免费小弹的向上速度不变。
+  var GRAVITY = 945, FLAP_V = -430, MAX_FALL = 504;
   var BASE_SPEED = 190, SPEED_PER_LEVEL = 8, MAX_SPEED = 280;
   var BASE_DIST = 300, DIST_PER_LEVEL = 7, MIN_DIST = 246;
   var LIVES = 3, INV_MS = 1400, READY_DUR = 2400;
@@ -709,6 +711,8 @@
       get pipes() { return pipes; },
       get themeName() { return T.name(charIndex, sceneIndex()); },
       get WORLD() { return { W: W, H: H, GROUND_Y: GROUND_Y, PLAYER_X: PLAYER_X, PIPE_W: PIPE_W, GAP_H: GAP_H }; },
+      get gravity() { return GRAVITY; },
+      get maxFall() { return MAX_FALL; },
       pickCombo: function (i) { pickCombo(i, false); },
       startNow: function () {
         state = STATE.PLAY; readyUntil = 0; lastCountIdx = 3; player.invUntil = 0;

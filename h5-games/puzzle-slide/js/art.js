@@ -8,7 +8,7 @@
  * 绘制约束（见 ../docs/STANDARD.md §6，目标 MiTV4A / Android 6 / WebView ≈ Chromium 47）：
  *   - 只用 arc / fillRect / quadraticCurveTo / createLinearGradient 这类 Chrome 47 就有的 API
  *   - 不用 emoji（真机上渲染成 □）
- *   - **色块要大、对比要强**：切成 3×3 之后，每一小块都得能看出「这是哪一角」，
+ *   - **色块要大、对比要强**：切成小块之后，每一块都得能看出「这是哪一角」，
  *     否则孩子拼到一半根本分不出来，只剩瞎试。所以刻意让每个场景都有
  *     「上中下三段明显不同的配色 + 一个占画面 40% 以上的主体」。
  *

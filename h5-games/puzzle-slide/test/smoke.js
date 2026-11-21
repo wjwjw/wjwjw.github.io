@@ -149,9 +149,16 @@ for (let run = 0; run < RUNS; run++) {
   // ============================================================
   section('1) puzzle.js —— 棋盘逻辑');
 
-  ok(P.sizeOf(1) === 3 && P.sizeOf(3) === 3, '前 3 关应为 3×3');
+  ok(P.sizeOf(1) === 2, '第 1 关应为 2×2（入门关）');
+  ok(P.sizeOf(2) === 3 && P.sizeOf(3) === 3, '第 2–3 关应为 3×3');
   ok(P.sizeOf(4) === 4 && P.sizeOf(9) === 4, '第 4 关起应为 4×4');
-  ok(P.timeOf(9) >= 90, '时间下限 90 秒，实际 ' + P.timeOf(9));
+  ok(P.timeOf(1) === 260, '第 1 关时限应为 260 秒（原 200 的 130%），实际 ' + P.timeOf(1));
+  ok(P.timeOf(2) === 242, '第 2 关时限应为 242 秒（原 186 的 130%），实际 ' + P.timeOf(2));
+  ok(P.timeOf(9) === 117, '时限下限应同步放大到 117 秒，实际 ' + P.timeOf(9));
+
+  const s2 = P.solvedBoard(2);
+  ok(s2.join(',') === '1,2,3,0', '2×2 完成态 = 1..3 + 空格');
+  ok(P.isSolved(s2), '2×2 完成态判定为已完成');
 
   const s3 = P.solvedBoard(3);
   ok(s3.join(',') === '1,2,3,4,5,6,7,8,0', '3×3 完成态 = 1..8 + 空格');
@@ -188,7 +195,7 @@ for (let run = 0; run < RUNS; run++) {
   }
 
   // ---- 打乱：必定可解、不重复、不丢失、不是完成态 ----
-  [3, 4].forEach(n => {
+  [2, 3, 4].forEach(n => {
     let bad = 0, solvedCnt = 0, unsolvable = 0;
     for (let i = 0; i < 200; i++) {
       const b = P.shuffle(n, P.shuffleCountOf(i % 8 + 1), rng(i * 7919 + n));
@@ -243,7 +250,7 @@ for (let run = 0; run < RUNS; run++) {
   els.btnStart.__fire('click');
   tick(0);
   ok(W.__puzzle.state === 'peek', '开局应先进入看图状态，实际 ' + W.__puzzle.state);
-  ok(W.__puzzle.n === 3, '第 1 关棋盘应为 3×3');
+  ok(W.__puzzle.n === 2, '第 1 关棋盘应为 2×2');
   ok(W.__puzzle.moves === 0, '开局步数应为 0');
 
   // 跳过看图
@@ -258,7 +265,7 @@ for (let run = 0; run < RUNS; run++) {
   // 注意：game.js 有 90ms 方向键防抖，两次 trigger 之间必须把时钟推过去，
   // 否则第二次会被直接丢掉（测出来的「步数没变」是假阳性）。
   {
-    const dirs = ['up', 'down', 'left', 'right'].filter(d => P.canMove(b0, 3, d));
+    const dirs = ['up', 'down', 'left', 'right'].filter(d => P.canMove(b0, W.__puzzle.n, d));
     tick(120);
     W.TVInput.trigger('dir', dirs[0]);
     tick(0);
@@ -269,7 +276,7 @@ for (let run = 0; run < RUNS; run++) {
   // 非法方向：不增加步数
   {
     const before = W.__puzzle.moves;
-    const bad = ['up', 'down', 'left', 'right'].filter(d => !P.canMove(W.__puzzle.board, 3, d));
+    const bad = ['up', 'down', 'left', 'right'].filter(d => !P.canMove(W.__puzzle.board, W.__puzzle.n, d));
     if (bad.length) {
       tick(120);
       W.TVInput.trigger('dir', bad[0]);
@@ -282,8 +289,9 @@ for (let run = 0; run < RUNS; run++) {
 
   // 走到「只差一步」再拼好 → 应过关
   {
-    const b = P.solvedBoard(3);
-    P.move(b, 3, 'right');                       // 只差一步：逆操作是 left
+    const n = W.__puzzle.n;
+    const b = P.solvedBoard(n);
+    P.move(b, n, 'right');                       // 只差一步：逆操作是 left
     W.__puzzle.setBoard(b.slice());
     const scoreBefore = Number(els.scoreText.textContent);
     tick(120);
@@ -296,10 +304,11 @@ for (let run = 0; run < RUNS; run++) {
     ok(Number(els.clearScore.textContent) > scoreBefore, '过关后分数应增加');
   }
 
-  // 下一关：第 4 关起棋盘变 4×4
+  // 下一关：第 2 关回到 3×3
   els.btnNext.__fire('click');
   tick(0);
   ok(W.__puzzle.level === 2, '点「下一关」应进入第 2 关');
+  ok(W.__puzzle.n === 3, '第 2 关棋盘应为 3×3');
   W.__puzzle.skipPeek();
   tick(0);
   ok(W.__puzzle.state === 'play', '第 2 关跳过看图后应可玩');

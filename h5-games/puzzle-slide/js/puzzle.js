@@ -19,8 +19,9 @@
 (function (global) {
   'use strict';
 
-  // 关卡 → 棋盘尺寸。低龄向：前 3 关都是 3×3，第 4 关起升到 4×4。
+  // 关卡 → 棋盘尺寸。低龄向：第 1 关 2×2 入门，第 2–3 关 3×3，第 4 关起升到 4×4。
   function sizeOf(level) {
+    if (level <= 1) return 2;
     return level >= 4 ? 4 : 3;
   }
 
@@ -29,8 +30,9 @@
     return Math.min(60 + level * 25, 260);
   }
 
+  // 关卡时限：在原基准上整体放宽 30%（含下限），低龄玩家不用赶时间。
   function timeOf(level) {
-    return Math.max(90, 200 - (level - 1) * 14);
+    return Math.round(Math.max(90, 200 - (level - 1) * 14) * 1.3);
   }
 
   function solvedBoard(n) {

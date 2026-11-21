@@ -14,7 +14,7 @@
 | 火眼金睛 · 找不同 | 程序化生成的找不同，方向键移动取景框，OK 标记差异 | [h5-games/spot-difference/index.html](h5-games/spot-difference/index.html) |
 | 记忆翻牌 · 配对 | 预览 → 扣牌 → 方向键移动高亮框，OK 翻两张相同的图案配成一对 | [h5-games/memory-match/index.html](h5-games/memory-match/index.html) |
 | 小小达人 · 认知问答 | 看图选答案：认形状 / 认颜色 / 认动物 / 比大小 / 找不同 / 数一数，不识字也能玩 | [h5-games/kids-quiz/index.html](h5-games/kids-quiz/index.html) |
-| 拼图乐园 · 滑动拼图 | 方向键把打乱的画推回原样，3×3 → 4×4，6 个手绘场景轮换 | [h5-games/puzzle-slide/index.html](h5-games/puzzle-slide/index.html) |
+| 拼图乐园 · 滑动拼图 | 方向键把打乱的画推回原样，2×2 → 3×3 → 4×4，6 个手绘场景轮换 | [h5-games/puzzle-slide/index.html](h5-games/puzzle-slide/index.html) |
 | 振翅飞行 · 三套天地 | 一键拍翅膀躲柱子；飞机 × 天空、乌龟 × 草丛、鲸鱼 × 海洋三套固定配套 | [h5-games/flipping-bird/index.html](h5-games/flipping-bird/index.html) |
 | 推箱子 · 经典搬运 | 18 关全部经离线求解器校验可解；4 套角色×场景可成套切换或自由搭配，含立体/平面与高对比风格 | [h5-games/sokoban/index.html](h5-games/sokoban/index.html) |
 | 弹球打砖块 · 六关挑战 | 左右按住移动挡板把球弹回去，打光整片彩色砖块；星砖会掉星星，掉球只掉一颗心 | [h5-games/brick-breaker/index.html](h5-games/brick-breaker/index.html) |
@@ -34,7 +34,7 @@
   - `spot-difference/` — 找不同（纯 Canvas 矢量绘制，场景每局随机生成）
   - `memory-match/` — 记忆翻牌配对（预览-扣牌-翻相同图案）
   - `kids-quiz/` — 小小达人认知问答（7 种题型全图形化，低龄儿童不识字也能玩）
-  - `puzzle-slide/` — 拼图乐园滑动拼图（3×3→4×4，6 个矢量场景，打乱必定可解）
+  - `puzzle-slide/` — 拼图乐园滑动拼图（2×2→3×3→4×4，6 个矢量场景，打乱必定可解）
   - `snake/` — 贪吃蛇（吃苹果长大，方向键转弯）
   - `flipping-bird/` — 振翅飞行（一键拍翅膀，三套固定配套：飞机×天空 / 乌龟×草丛 / 鲸鱼×海洋）
   - `sokoban/` — 推箱子（经典搬运，4 套主题可配套 / 自由搭配，关卡经离线求解器校验可解）

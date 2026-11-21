@@ -28,8 +28,11 @@
 
 | 关卡 | 棋盘 | 图案 | 时间 |
 | --- | --- | --- | --- |
-| 1–3 | 3×3 | 6 个场景按关轮换（小房子 / 小猫咪 / 向日葵 / 小汽车 / 小鱼儿 / 小熊） | 200s 起，每关 −14s |
-| 4+ | 4×4 | 同上轮换 | 下限 90s |
+| 1 | 2×2 | 6 个场景按关轮换（小房子 / 小猫咪 / 向日葵 / 小汽车 / 小鱼儿 / 小熊） | 260s |
+| 2–3 | 3×3 | 同上轮换 | 242s / 224s |
+| 4+ | 4×4 | 同上轮换 | 下限 117s |
+
+每关时限为原基准的 **130%**（含下限，取整到秒）。
 
 打乱步数 `min(60 + 关卡×25, 260)`。过关得分 `max(100, N²×100 − 步数×8) + 剩余秒数×6`。
 
@@ -59,8 +62,8 @@ puzzle-slide/
 python -m http.server 8010
 
 cd h5-games/puzzle-slide
-node test/smoke.js        # 90 项：棋盘逻辑 / 打乱必定可解 / 图源 / 按键通关 / 静态约束
-node test/smoke.js 30     # 连跑 30 局（1482 项），验证随机打乱的稳定性
+node test/smoke.js        # 棋盘逻辑 / 打乱必定可解 / 图源 / 按键通关 / 静态约束
+node test/smoke.js 30     # 连跑 30 局，验证随机打乱的稳定性
 node test/shot.js  _shots # 5 张截图：start / peek / play / almost / clear
 node test/layout.js       # 6 场景图源自检 + 3 视口共 33 项几何断言
 node test/in-launcher.js  # 启动器内：菜单可见、iframe 内 Art/Puzzle/TVInput 就绪
